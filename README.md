@@ -1,14 +1,227 @@
 # Open Board - GIMP Scripts
 
-**Open Board** est un ensemble de scripts Python pour GIMP qui permettent de créer, gérer et organiser des planches d'images (boards) de manière professionnelle. Parfait pour les portfolios, les mood boards, les planches de référence ou toute présentation d'images organisée.
+[English](#english) | [Français](#français)
+
+---
+
+<a name="english"></a>
+## 🇬🇧 English
+
+**Open Board** is the open-source version of **Board** (which works integrated with Capture One and Photoshop). It's a set of Python scripts for GIMP that allow you to create, manage, and organize image boards professionally. Perfect for portfolios, mood boards, reference sheets, or any organized image presentation.
 
 ![GIMP Version](https://img.shields.io/badge/GIMP-2.10%2B-purple)
 ![Python](https://img.shields.io/badge/Python-2.7-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 🎯 Fonctionnalités
+### Features
 
-### 1. **Create Board** - Création de planches
+#### 1. **Create Board** - Board Creation
+- Customizable cell grid creation (columns × rows)
+- Support for **Single** and **Spread** (double-page) modes
+- Automatic resizing for space optimization
+- Margin, spacing, and border management
+- Overlay support (decorative masks)
+- Customizable logo and caption addition
+- Automatic guide generation
+- `.board` file generation containing metadata
+
+#### 2. **Import Images** - Image Import
+- Import by folder (all images)
+- Single image import
+- Pattern-based import (e.g., `IMG_*.jpg`)
+- Automatic placement in empty cells
+- Intelligent orientation handling (portrait/landscape)
+- Resize modes: **fit**, **cover**, **noResize**
+- Automatic board extension if needed
+- Automatic cell masks
+
+#### 3. **Add Image Names** - Name Addition
+- Automatic filename addition below each image
+- Customizable font, size, and color
+- Intelligent positioning based on cell type
+- Support for Single and Spread modes
+
+### Installation
+
+#### Prerequisites
+- GIMP 2.10 or higher
+- Python 2.7 (included with GIMP)
+
+#### Script Installation
+
+1. **Download the scripts** from this repository
+
+2. **Copy the files** to the GIMP scripts folder:
+   
+   **macOS:**
+   ```bash
+   ~/Library/Application Support/GIMP/2.10/plug-ins/
+   ```
+   
+   **Linux:**
+   ```bash
+   ~/.config/GIMP/2.10/plug-ins/
+   ```
+   
+   **Windows:**
+   ```
+   C:\Users\[YourName]\AppData\Roaming\GIMP\2.10\plug-ins\
+   ```
+
+3. **Make scripts executable** (macOS/Linux):
+   ```bash
+   chmod +x createOpenBoard.py
+   chmod +x importOpenBoard.py
+   chmod +x addImageNames.py
+   ```
+
+4. **Restart GIMP**
+
+Scripts will appear in the menu: **File → Open Board**
+
+### Usage
+
+#### Complete Workflow
+
+##### 1️⃣ Create a New Board
+
+1. In GIMP (main window), go to: **File → Open Board → Create Board...**
+
+2. Configure your board:
+   - **Project Name**: `MyPortfolio`
+   - **Destination Folder**: Choose where to save
+   - **Canvas**: Dimensions and resolution (e.g., A3 at 300 DPI)
+   - **Grid**: Number of rows and columns
+   - **Cell Type**: Single or Spread
+   - **Cell Dimensions**: Width, height, margins
+   - **Colors**: Background, borders, masks
+   - **Extras**: Logo, caption, overlays
+
+3. Click **OK**
+
+✅ An `.xcf` file and a `.board` file are created
+
+##### 2️⃣ Import Images
+
+1. Open your board (the `.xcf` file)
+
+2. Go to: **File → Open Board → Import Images...**
+
+3. Configure the import:
+   - **Import Mode**: Folder, Single Image, or Pattern
+   - **Source**: Select your folder/file
+   - **Cell Type**: Must match your board (Single/Spread)
+   - **Resize mode**:
+     - `fit`: Image fits entirely in the cell
+     - `cover`: Image fills the cell (may be cropped)
+     - `noResize`: Original size
+   - **Auto-extend**: Automatically adds rows/columns if needed
+   - **Direction**: Bottom, Right, or Alternate
+
+4. Click **OK**
+
+✅ Images are automatically placed in cells
+
+##### 3️⃣ Add Image Names (Optional)
+
+1. In your open board, go to: **File → Open Board → Add Image Names...**
+
+2. Configure the text:
+   - **Font**: Choose your font
+   - **Size**: In pixels
+   - **Color**: Text color
+   - **Distance**: Space between cell and text
+
+3. Click **OK**
+
+✅ Filenames appear below each image
+
+### 📁 Project Structure
+
+```
+OpenBoard/
+├── src/
+│   ├── createOpenBoard.py      # Board creation
+│   ├── importOpenBoard.py      # Image import
+│   └── addImageNames.py        # Name addition
+├── README.md                   # This file
+└── LICENSE                     # MIT License
+```
+
+### 🔧 .board File Format
+
+`.board` files are text files containing:
+
+```
+# Board Layout File
+#boardName=MyBoard
+#nbrCols=3
+#nbrRows=4
+#cellWidth=800
+#cellHeight=600
+#cellType=spread
+#adjustedMargin=20
+1,100,100,100,700,900,700,900,100
+2,920,100,920,700,1720,700,1720,100
+...
+```
+
+Each cell line contains: `index,topLeftX,topLeftY,bottomLeftX,bottomLeftY,bottomRightX,bottomRightY,topRightX,topRightY`
+
+### Use Cases
+
+- **Photography Portfolios**: Create professional boards
+- **Mood Boards**: Organize your visual references
+- **Contact Sheets**: Organized previews
+- **Storyboards**: For animation or cinema
+- **Product Catalogs**: Collection presentations
+- **Character Sheets**: For video game design
+
+### Contributing
+
+Contributions are welcome! Feel free to:
+- Report bugs
+- Propose new features
+- Submit pull requests
+
+### Changelog
+
+#### Version 1.0 (2025)
+- ✅ Board creation with customizable grids
+- ✅ Image import with automatic placement
+- ✅ Image name addition
+- ✅ Single and Spread mode support
+- ✅ Automatic board extension
+- ✅ Overlay support
+- ✅ Extension change: `.dit` → `.board`
+- ✅ Unified menu: File → Open Board
+
+### License
+
+MIT License - see LICENSE file for details
+
+### Author
+
+**Yan Senez**
+
+---
+
+**Note**: These scripts were developed for GIMP 2.10 with Python 2.7 (Python-Fu). They use the GIMP Python-Fu API which is not available outside the GIMP environment.
+
+---
+
+<a name="français"></a>
+## 🇫🇷 Français
+
+**Open Board** est la version open source de **Board** (qui fonctionne en intégration avec Capture One et Photoshop). Il s'agit d'un ensemble de scripts Python pour GIMP qui permettent de créer, gérer et organiser des planches d'images (boards) de manière professionnelle. Parfait pour les portfolios, les mood boards, les planches de référence ou toute présentation d'images organisée.
+
+![GIMP Version](https://img.shields.io/badge/GIMP-2.10%2B-purple)
+![Python](https://img.shields.io/badge/Python-2.7-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+## Fonctionnalités
+
+#### 1. **Create Board** - Création de planches
 - Création de grilles de cellules personnalisables (colonnes × lignes)
 - Support des modes **Single** et **Spread** (double page)
 - Redimensionnement automatique pour optimiser l'espace
@@ -18,7 +231,7 @@
 - Génération automatique de guides
 - Création d'un fichier `.board` contenant les métadonnées
 
-### 2. **Import Images** - Import d'images
+#### 2. **Import Images** - Import d'images
 - Import par dossier (toutes les images)
 - Import d'image unique
 - Import par pattern (ex: `IMG_*.jpg`)
@@ -28,19 +241,19 @@
 - Extension automatique du board si nécessaire
 - Masques de cellule automatiques
 
-### 3. **Add Image Names** - Ajout de noms
+#### 3. **Add Image Names** - Ajout de noms
 - Ajout automatique des noms de fichiers sous chaque image
 - Police, taille et couleur personnalisables
 - Positionnement intelligent selon le type de cellule
 - Support des modes Single et Spread
 
-## 📦 Installation
+### Installation
 
-### Prérequis
+#### Prérequis
 - GIMP 2.10 ou supérieur
 - Python 2.7 (inclus avec GIMP)
 
-### Installation des scripts
+#### Installation des scripts
 
 1. **Téléchargez les scripts** depuis ce dépôt
 
@@ -72,11 +285,11 @@
 
 Les scripts apparaîtront dans le menu : **File → Open Board**
 
-## 🚀 Utilisation
+### 🚀 Utilisation
 
-### Workflow complet
+#### Workflow complet
 
-#### 1️⃣ Créer un nouveau board
+##### 1️⃣ Créer un nouveau board
 
 1. Dans GIMP (fenêtre principale), allez dans : **File → Open Board → Create Board...**
 
@@ -94,7 +307,7 @@ Les scripts apparaîtront dans le menu : **File → Open Board**
 
 ✅ Un fichier `.xcf` et un fichier `.board` sont créés
 
-#### 2️⃣ Importer des images
+##### 2️⃣ Importer des images
 
 1. Ouvrez votre board (le fichier `.xcf`)
 
@@ -115,7 +328,7 @@ Les scripts apparaîtront dans le menu : **File → Open Board**
 
 ✅ Les images sont placées automatiquement dans les cellules
 
-#### 3️⃣ Ajouter les noms des images (optionnel)
+##### 3️⃣ Ajouter les noms des images (optionnel)
 
 1. Dans votre board ouvert, allez dans : **File → Open Board → Add Image Names...**
 
@@ -129,7 +342,7 @@ Les scripts apparaîtront dans le menu : **File → Open Board**
 
 ✅ Les noms de fichiers apparaissent sous chaque image
 
-## 📁 Structure du projet
+### 📁 Structure du projet
 
 ```
 OpenBoard/
@@ -141,7 +354,7 @@ OpenBoard/
 └── LICENSE                     # Licence MIT
 ```
 
-## 🔧 Format du fichier .board
+### 🔧 Format du fichier .board
 
 Les fichiers `.board` sont des fichiers texte contenant :
 
@@ -161,7 +374,7 @@ Les fichiers `.board` sont des fichiers texte contenant :
 
 Chaque ligne de cellule contient : `index,topLeftX,topLeftY,bottomLeftX,bottomLeftY,bottomRightX,bottomRightY,topRightX,topRightY`
 
-## 🎨 Cas d'usage
+### Cas d'usage
 
 - **Portfolios photographiques** : Créez des planches professionnelles
 - **Mood boards** : Organisez vos références visuelles
@@ -170,16 +383,16 @@ Chaque ligne de cellule contient : `index,topLeftX,topLeftY,bottomLeftX,bottomLe
 - **Catalogues produits** : Présentations de collections
 - **Planches de personnages** : Pour le design de jeu vidéo
 
-## 🤝 Contribution
+### Contribution
 
 Les contributions sont les bienvenues ! N'hésitez pas à :
 - Signaler des bugs
 - Proposer de nouvelles fonctionnalités
 - Soumettre des pull requests
 
-## 📝 Changelog
+### Changelog
 
-### Version 1.0 (2025)
+#### Version 1.0 (2025)
 - ✅ Création de boards avec grilles personnalisables
 - ✅ Import d'images avec placement automatique
 - ✅ Ajout de noms d'images
@@ -189,19 +402,14 @@ Les contributions sont les bienvenues ! N'hésitez pas à :
 - ✅ Changement d'extension : `.dit` → `.board`
 - ✅ Menu unifié : File → Open Board
 
-## 📄 Licence
+### Licence
 
 MIT License - voir le fichier LICENSE pour plus de détails
 
-## 👤 Auteur
+### Auteur
 
 **Yan Senez**
-
-## 🙏 Remerciements
-
-Merci à Claude (Anthropic) pour l'assistance au développement et la conversion depuis les scripts Photoshop originaux.
 
 ---
 
 **Note** : Ces scripts ont été développés pour GIMP 2.10 avec Python 2.7 (Python-Fu). Ils utilisent l'API GIMP Python-Fu qui n'est pas disponible en dehors de l'environnement GIMP.
-

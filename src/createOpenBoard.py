@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Open Board - Layout Creator for GIMP
 # Converted from Photoshop script with the help of Claude
-# Based on original by Yan Senez
+# By Yan Senez
 # Version 1.0
 
 from gimpfu import *
@@ -12,11 +12,13 @@ import json
 import math
 
 # Global variables to store configuration
+# Variables globales pour stocker la configuration
 global_dest_folder = None
 log_file_cleared = False
 
 def write_log(message, log_folder_path=None):
-    """Write log messages to a file"""
+    """Write log messages to a file
+    Ecrire des messages de log dans un fichier"""
     try:
         if log_folder_path is None:
             # Use temp directory if no folder is specified
@@ -42,7 +44,8 @@ def write_log(message, log_folder_path=None):
         return False
 
 def ensure_folder_exists(folder_path):
-    """Ensure a folder exists (create if needed)"""
+    """Ensure a folder exists (create if needed)
+    S'assurer qu'un dossier existe (creer si necessaire)"""
     try:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -53,7 +56,8 @@ def ensure_folder_exists(folder_path):
         return None
 
 def write_cell_coordinates(rectangle, dit_path, cell_number):
-    """Write cell coordinates to a .board file"""
+    """Write cell coordinates to a .board file
+    Ecrire les coordonnees d'une cellule dans un fichier .board"""
     try:
         with open(dit_path, 'a') as dit_file:
             # Format: CellNumber,topLeftX,topLeftY,bottomLeftX,bottomLeftY,bottomRightX,bottomRightY,topRightX,topRightY
@@ -69,7 +73,8 @@ def write_cell_coordinates(rectangle, dit_path, cell_number):
         write_log("Error writing cell coordinates: {0}".format(e))
 
 def remove_dit_file(file_path):
-    """Remove a .board file if it exists"""
+    """Remove a .board file if it exists
+    Supprimer un fichier .board s'il existe"""
     try:
         if not file_path:
             write_log("No .board file path provided to remove")
@@ -89,17 +94,22 @@ def remove_dit_file(file_path):
         return False
 
 def create_guide(img, position, orientation):
-    """Create a guide in the image"""
+    """Create a guide in the image
+    Creer un guide dans l'image"""
     if orientation == "horizontal":
         pdb.gimp_image_add_hguide(img, position)
     else:  # vertical
         pdb.gimp_image_add_vguide(img, position)
 
 def find_overlay_files(path):
-    """
-    Trouver les fichiers overlay compatibles
+    """Trouver les fichiers overlay compatibles
+    Find compatible overlay files
+    
     Si path est un fichier, retourner [path]
     Si path est un dossier, retourner tous les fichiers compatibles tries
+    
+    If path is a file, return [path]
+    If path is a folder, return all compatible files sorted
     """
     try:
         if not path or not os.path.exists(path):
@@ -134,7 +144,8 @@ def find_overlay_files(path):
         return []
 
 def get_image_orientation(image_path):
-    """Determiner l'orientation d'une image (Portrait, Landscape, ou Square)"""
+    """Determiner l'orientation d'une image (Portrait, Landscape, ou Square)
+    Determine image orientation (Portrait, Landscape, or Square)"""
     try:
         # Charger l'image temporairement pour obtenir ses dimensions
         temp_img = pdb.gimp_file_load(image_path, image_path)
@@ -153,9 +164,11 @@ def get_image_orientation(image_path):
         return "Landscape"  # Valeur par defaut
 
 def calculate_overlay_dimensions(cell_width, cell_height, cell_type, orientation, margin):
-    """
-    Calculer les dimensions et positions pour les overlays
+    """Calculer les dimensions et positions pour les overlays
+    Calculate overlay dimensions and positions
+    
     Retourne un dict avec les informations de placement
+    Returns a dict with placement information
     """
     result = {
         'position': 'center',
@@ -238,9 +251,11 @@ def place_overlay_in_cell(img, overlay_path, cell_x, cell_y, cell_width, cell_he
         return None
 
 def get_overlay_index_for_cell(row, col, nbr_cols, overlay_files_count, cell_type):
-    """
-    Calculer l'index de l'overlay a utiliser pour une cellule donnee
+    """Calculer l'index de l'overlay a utiliser pour une cellule donnee
+    Calculate the overlay index to use for a given cell
+    
     Logique identique a Photoshop
+    Same logic as Photoshop
     """
     cell_number = (row - 1) * nbr_cols + (col - 1)
     
@@ -253,8 +268,8 @@ def get_overlay_index_for_cell(row, col, nbr_cols, overlay_files_count, cell_typ
         return cell_number % overlay_files_count
 
 def write_overlay_metadata_to_dit(dit_path, overlay_files, overlay_indexes):
-    """
-    Ecrire les metadonnees des overlays dans le fichier .board
+    """Ecrire les metadonnees des overlays dans le fichier .board
+    Write overlay metadata to the .board file
     """
     try:
         # Lire le contenu existant
@@ -296,11 +311,17 @@ def write_overlay_metadata_to_dit(dit_path, overlay_files, overlay_indexes):
 
 def convert_hex_to_rgb(hex_color):
     """Convert a hex color to RGB values (0-255)
+    Convertir une couleur hexa en valeurs RGB (0-255)
     
     Accepts either:
     - A hex string like "#FFFFFF" or "FFFFFF"
     - A gimpcolor.RGB object (from GIMP UI)
     - A tuple/list of RGB values (0-255)
+    
+    Accepte:
+    - Une chaine hexa comme "#FFFFFF" ou "FFFFFF"
+    - Un objet gimpcolor.RGB (depuis l'interface GIMP)
+    - Un tuple/liste de valeurs RGB (0-255)
     """
     # Si c'est deja un objet gimpcolor.RGB ou un tuple/liste
     if hasattr(hex_color, 'r') and hasattr(hex_color, 'g') and hasattr(hex_color, 'b'):
@@ -329,12 +350,14 @@ def convert_hex_to_rgb(hex_color):
         return (255, 255, 255)
 
 def convert_rgb_to_gimp_color(rgb):
-    """Convert RGB values (0-255) to GIMP color values (0.0-1.0)"""
+    """Convert RGB values (0-255) to GIMP color values (0.0-1.0)
+    Convertir des valeurs RGB (0-255) en valeurs de couleur GIMP (0.0-1.0)"""
     r, g, b = rgb
     return (r / 255.0, g / 255.0, b / 255.0)
 
 def convert_to_pixels(value, unit, resolution):
-    """Convert dimensions to pixels based on specified units"""
+    """Convert dimensions to pixels based on specified units
+    Convertir des dimensions en pixels selon l'unite specifiee"""
     try:
         # Assurer que les valeurs sont des nombres
         value = float(value)
@@ -404,7 +427,8 @@ def create_board_layout(board_name, dest_folder,
                        logo_folder_path,
                        overlay_mask_on, overlay_file_path, overlay_folder_path,
                        should_create_guides, drop_zone):
-    """Main function to create the board layout - Reorganized for optimal UI flow"""
+    """Main function to create the board layout - Reorganized for optimal UI flow
+    Fonction principale pour creer la planche - Reorganisee pour un flux UI optimal"""
     
     # Start log
     write_log("Script started")
@@ -1048,6 +1072,7 @@ def create_board_layout(board_name, dest_folder,
 
 # Register the function with GIMP
 # Enregistrer le plugin GIMP
+# Plugin registration
 register(
     "Open_Board",
     "Open Board - Create a board layout for organizing images",

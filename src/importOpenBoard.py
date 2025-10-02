@@ -5,6 +5,10 @@
 GIMP Board Import Script
 Imports images into an existing board layout created with createGimpBoard.py
 Compatible with GIMP 2.10 (Python 2.7)
+
+Script d'import de planches GIMP
+Importe des images dans une planche existante créée avec createGimpBoard.py
+Compatible avec GIMP 2.10 (Python 2.7)
 """
 
 from gimpfu import *
@@ -13,17 +17,20 @@ import math
 import time
 
 # Global variables for logging
+# Variables globales pour les logs
 log_messages = []
 log_file_path = None
 
 def write_log(message):
-    """Ecrire un message dans le log"""
+    """Ecrire un message dans le log
+    Write a message to the log"""
     global log_messages, log_file_path
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     full_message = "{0} - {1}".format(timestamp, message)
     log_messages.append(full_message)
     
     # Ecrire dans le fichier log si le chemin est defini
+    # Write to log file if path is defined
     if log_file_path:
         try:
             with open(log_file_path, 'a') as f:
@@ -32,10 +39,14 @@ def write_log(message):
             pdb.gimp_message("Error writing log: {0}".format(e))
 
 def find_overlay_files(path):
-    """
-    Trouver les fichiers overlay compatibles
+    """Trouver les fichiers overlay compatibles
+    Find compatible overlay files
+    
     Si path est un fichier, retourner [path]
     Si path est un dossier, retourner tous les fichiers compatibles tries
+    
+    If path is a file, return [path]
+    If path is a folder, return all compatible files sorted
     """
     try:
         if not path or not os.path.exists(path):
@@ -70,9 +81,11 @@ def find_overlay_files(path):
         return []
 
 def calculate_overlay_dimensions(cell_width, cell_height, cell_type, orientation, margin):
-    """
-    Calculer les dimensions et positions pour les overlays
+    """Calculer les dimensions et positions pour les overlays
+    Calculate overlay dimensions and positions
+    
     Retourne un dict avec les informations de placement
+    Returns a dict with placement information
     """
     result = {
         'position': 'center',
@@ -107,17 +120,17 @@ def calculate_overlay_dimensions(cell_width, cell_height, cell_type, orientation
 
 def place_overlay_in_cell(img, overlay_path, cell_x, cell_y, cell_width, cell_height, 
                           cell_type, overlay_group, position_info):
-    """
-    Placer un overlay dans une cellule
+    """Placer un overlay dans une cellule
+    Place an overlay in a cell
     
     Parameters:
-    - img: L'image GIMP active
-    - overlay_path: Chemin du fichier overlay
-    - cell_x, cell_y: Position de la cellule
-    - cell_width, cell_height: Dimensions de la cellule
-    - cell_type: "single" ou "spread"
-    - overlay_group: Groupe de calques pour les overlays
-    - position_info: Informations de placement calculees
+    - img: L'image GIMP active / Active GIMP image
+    - overlay_path: Chemin du fichier overlay / Overlay file path
+    - cell_x, cell_y: Position de la cellule / Cell position
+    - cell_width, cell_height: Dimensions de la cellule / Cell dimensions
+    - cell_type: "single" ou "spread" / "single" or "spread"
+    - overlay_group: Groupe de calques pour les overlays / Layer group for overlays
+    - position_info: Informations de placement calculees / Calculated placement information
     """
     try:
         write_log("Placing overlay: {0}".format(overlay_path))
@@ -155,23 +168,27 @@ def place_overlay_in_cell(img, overlay_path, cell_x, cell_y, cell_width, cell_he
         return None
 
 def get_overlay_index_for_cell(row, col, nbr_cols, overlay_files_count, cell_type):
-    """
-    Calculer l'index de l'overlay a utiliser pour une cellule donnee
+    """Calculer l'index de l'overlay a utiliser pour une cellule donnee
+    Calculate the overlay index to use for a given cell
+    
     Logique identique a Photoshop
+    Same logic as Photoshop
     """
     cell_number = (row - 1) * nbr_cols + (col - 1)
     
     if cell_type.lower() == "spread":
         # En mode spread, les paires restent ensemble
+        # In spread mode, pairs stay together
         pair_index = ((cell_number % 2) * 2) % overlay_files_count
         return pair_index
     else:
         # En mode single, sequence simple
+        # In single mode, simple sequence
         return cell_number % overlay_files_count
 
 def save_last_cell_index(board_path, cell_index):
-    """
-    Sauvegarder l'index de la derniere cellule utilisee
+    """Sauvegarder l'index de la derniere cellule utilisee
+    Save the index of the last used cell
     """
     try:
         board_dir = os.path.dirname(board_path)
@@ -186,8 +203,8 @@ def save_last_cell_index(board_path, cell_index):
         write_log("ERROR saving last cell index: {0}".format(e))
 
 def load_last_cell_index(board_path):
-    """
-    Charger l'index de la derniere cellule utilisee
+    """Charger l'index de la derniere cellule utilisee
+    Load the index of the last used cell
     """
     try:
         board_dir = os.path.dirname(board_path)
@@ -207,8 +224,9 @@ def load_last_cell_index(board_path):
         return 0
 
 def read_dit_file(dit_path):
-    """
-    Lire le fichier .board et extraire les coordonnees des cellules
+    """Lire le fichier .board et extraire les coordonnees des cellules
+    Read the .board file and extract cell coordinates
+    
     Format: index,topLeftX,topLeftY,bottomLeftX,bottomLeftY,bottomRightX,bottomRightY,topRightX,topRightY
     """
     write_log("Reading BOARD file: {0}".format(dit_path))
@@ -283,9 +301,11 @@ def read_dit_file(dit_path):
         return None
 
 def find_empty_cells(img, board_content_group):
-    """
-    Trouver les cellules vides dans le board
+    """Trouver les cellules vides dans le board
+    Find empty cells in the board
+    
     Une cellule est vide si elle n'a pas de calque d'image a l'interieur du groupe Board Content
+    A cell is empty if it has no image layer inside the Board Content group
     """
     write_log("Searching for empty cells in Board Content group")
     
@@ -306,7 +326,8 @@ def find_empty_cells(img, board_content_group):
         return []
 
 def get_image_orientation(image_path):
-    """Determiner l'orientation d'une image (Portrait ou Landscape)"""
+    """Determiner l'orientation d'une image (Portrait ou Landscape)
+    Determine image orientation (Portrait or Landscape)"""
     try:
         # Charger l'image temporairement pour obtenir ses dimensions
         temp_img = pdb.gimp_file_load(image_path, image_path)
@@ -323,17 +344,17 @@ def get_image_orientation(image_path):
         return "Portrait"
 
 def place_image_in_cell(img, image_path, cell, cell_type, resize_mode, board_metadata, all_cells, use_side="left"):
-    """
-    Placer une image dans une cellule - Logique exacte du script Photoshop
+    """Placer une image dans une cellule - Logique exacte du script Photoshop
+    Place an image in a cell - Exact logic from Photoshop script
     
     Parameters:
-    - img: L'image GIMP active
-    - image_path: Chemin de l'image a placer
-    - cell: Dict avec les coordonnees de la cellule
-    - all_cells: Liste de toutes les cellules (pour calculer row/col)
-    - cell_type: "single" ou "spread"
-    - resize_mode: "fit", "cover" ou "noResize"
-    - board_metadata: Metadonnees du board (pour les marges)
+    - img: L'image GIMP active / Active GIMP image
+    - image_path: Chemin de l'image a placer / Image path to place
+    - cell: Dict avec les coordonnees de la cellule / Dict with cell coordinates
+    - all_cells: Liste de toutes les cellules (pour calculer row/col) / List of all cells (to calculate row/col)
+    - cell_type: "single" ou "spread" / "single" or "spread"
+    - resize_mode: "fit", "cover" ou "noResize" / "fit", "cover" or "noResize"
+    - board_metadata: Metadonnees du board (pour les marges) / Board metadata (for margins)
     """
     write_log("====== Placing image in cell {0} ======".format(cell['index']))
     write_log("Image: {0}".format(image_path))
@@ -1015,21 +1036,23 @@ def find_empty_cell(img, cells, cell_type, orientation, start_index=0):
         return (None, None)
 
 def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type, overlay_files=None):
-    """
-    Etendre le board en ajoutant une nouvelle ligne ou colonne
+    """Etendre le board en ajoutant une nouvelle ligne ou colonne
+    Extend the board by adding a new row or column
+    
     Utilise la meme logique que Photoshop: analyse les positions reelles des cellules existantes
+    Uses the same logic as Photoshop: analyzes actual positions of existing cells
     
     Parameters:
-    - img: L'image GIMP active
-    - dit_path: Chemin vers le fichier .board
-    - cells: Liste des cellules existantes
-    - metadata: Metadonnees du board
+    - img: L'image GIMP active / Active GIMP image
+    - dit_path: Chemin vers le fichier .board / Path to .board file
+    - cells: Liste des cellules existantes / List of existing cells
+    - metadata: Metadonnees du board / Board metadata
     - extension_direction: 0=Bottom, 1=Right, 2=Alternate
-    - cell_type: "single" ou "spread"
-    - overlay_files: Liste des fichiers overlay (optionnel)
+    - cell_type: "single" ou "spread" / "single" or "spread"
+    - overlay_files: Liste des fichiers overlay (optionnel) / List of overlay files (optional)
     
     Returns:
-    - True si l'extension a reussi, False sinon
+    - True si l'extension a reussi, False sinon / True if extension succeeded, False otherwise
     """
     try:
         write_log("====== Extending board ======")
@@ -1816,18 +1839,18 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
         return False
 
 def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell, auto_extend=False, extension_direction=0, user_overlay_files=None):
-    """
-    Fonction principale pour importer des images dans un board avec support d'extension automatique
+    """Fonction principale pour importer des images dans un board avec support d'extension automatique
+    Main function to import images into a board with automatic extension support
     
     Parameters:
-    - img: L'image GIMP active (le board)
-    - image_files: Liste des chemins d'images a importer
-    - cell_type: "single" ou "spread"
-    - resize_mode: "fit", "cover" ou "noResize"
-    - start_cell: Index de la premiere cellule (1-based)
-    - auto_extend: Si True, etendre automatiquement le board quand toutes les cellules sont pleines
+    - img: L'image GIMP active (le board) / Active GIMP image (the board)
+    - image_files: Liste des chemins d'images a importer / List of image paths to import
+    - cell_type: "single" ou "spread" / "single" or "spread"
+    - resize_mode: "fit", "cover" ou "noResize" / "fit", "cover" or "noResize"
+    - start_cell: Index de la premiere cellule (1-based) / Index of first cell (1-based)
+    - auto_extend: Si True, etendre automatiquement le board quand toutes les cellules sont pleines / If True, auto-extend board when all cells are full
     - extension_direction: 0=Bottom, 1=Right, 2=Alternate
-    - user_overlay_files: Liste des fichiers overlay fournis par l'utilisateur (optionnel)
+    - user_overlay_files: Liste des fichiers overlay fournis par l'utilisateur (optionnel) / List of user-provided overlay files (optional)
     """
     global log_file_path
     
@@ -2003,10 +2026,12 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
         pdb.gimp_displays_flush()
 
 # Interface utilisateur amelioree
+# Improved user interface
 def import_board_ui(img, drawable, import_mode, image_folder, image_file, image_pattern, cell_type, 
                    resize_mode, start_cell, overlay_enabled, overlay_file, overlay_folder,
                    auto_extend, extension_direction):
-    """Interface utilisateur pour l'import d'images avec support de multiples modes"""
+    """Interface utilisateur pour l'import d'images avec support de multiples modes
+    User interface for image import with support for multiple modes"""
     
     import glob
     image_files = []
@@ -2123,6 +2148,7 @@ def import_board_ui(img, drawable, import_mode, image_folder, image_file, image_
                           auto_extend, extension_direction, user_overlay_files)
 
 # Enregistrement du plugin
+# Plugin registration
 register(
     "python_fu_board_import",
     "Open Board - Import images into an existing board layout",
