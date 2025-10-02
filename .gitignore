@@ -1,0 +1,37 @@
+# Python
+*.pyc
+*.pyo
+__pycache__/
+*.py[cod]
+
+# GIMP files (examples/tests - not the scripts themselves)
+*.xcf
+*.board
+*_add_names.log
+*_import.log
+*_last_cell.txt
+extension_direction.txt
+board_gimp_log.txt
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Thumbnails
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.old
+
