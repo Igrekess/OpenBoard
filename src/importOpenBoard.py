@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+# By Yan Senez
+# Version 1.0
+# Import Open Board - GIMP Script
+# Imports images into an existing board layout created with createGimpBoard.py
+# Compatible with GIMP 2.10 (Python 2.7)
 """
 GIMP Board Import Script
 Imports images into an existing board layout created with createGimpBoard.py
