@@ -312,6 +312,20 @@ def create_board_layout(board_name, dest_folder,
         pdb.gimp_message("Invalid board name")
         return
     
+    # Validate destination folder
+    if not dest_folder or not isinstance(dest_folder, str) or dest_folder.strip() == "":
+        pdb.gimp_message("Please select a destination folder")
+        return
+    
+    # Ensure destination folder exists
+    if not os.path.exists(dest_folder):
+        try:
+            os.makedirs(dest_folder)
+            write_log("Created destination folder: {0}".format(dest_folder))
+        except Exception as e:
+            pdb.gimp_message("Cannot create destination folder: {0}".format(e))
+            return
+    
     # Convert parameters
     units_list = ["px", "mm", "cm", "in", "pt"]
     cell_type_list = ["single", "spread"]

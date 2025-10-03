@@ -96,6 +96,16 @@ def find_overlay_files(path):
         write_log("Error finding overlay files: {0}".format(e))
         return []
 
+def create_guide(img, position, orientation):
+    """Create guide"""
+    try:
+        if orientation == "horizontal":
+            pdb.gimp_image_add_hguide(img, position)
+        else:
+            pdb.gimp_image_add_vguide(img, position)
+    except Exception as e:
+        write_log("Error creating guide: {0}".format(e))
+
 def get_image_orientation(image_path):
     """Get image orientation"""
     try:
@@ -443,7 +453,7 @@ def update_simple_page_mask(img, cell, cell_type, all_cells, board_metadata, ori
     except Exception as e:
         write_log("WARNING: Could not update mask: {0}".format(e))
 
-def place_image_in_cell(img, image_path, cell, cell_type, resize_mode, board_metadata, all_cells, use_side="left"):
+def place_image_in_cell(img, image_path, cell, cell_type, resize_mode, board_metadata, all_cells, use_side="left", should_create_guides=False):
     """Place image in cell - main function"""
     write_log("====== Placing image in cell {0} ======".format(cell['index']))
     write_log("Image: {0}".format(image_path))
@@ -503,6 +513,36 @@ def place_image_in_cell(img, image_path, cell, cell_type, resize_mode, board_met
             pdb.gimp_image_reorder_item(img, new_layer, board_content_group, 0)
         
         pdb.gimp_image_delete(loaded_image)
+        
+        # Create guides if requested
+        if should_create_guides:
+            try:
+                cell_left = int(cell['minX'])
+                cell_top = int(cell['minY'])
+                cell_right = int(cell['maxX'])
+                cell_bottom = int(cell['maxY'])
+                margin_size = safe_int(board_metadata.get('adjustedMargin', 0))
+                
+                # Vertical guides
+                create_guide(img, cell_left, "vertical")
+                create_guide(img, cell_right, "vertical")
+                create_guide(img, cell_left + margin_size, "vertical")
+                create_guide(img, cell_right - margin_size, "vertical")
+                
+                # Horizontal guides
+                create_guide(img, cell_top, "horizontal")
+                create_guide(img, cell_bottom, "horizontal")
+                create_guide(img, cell_top + margin_size, "horizontal")
+                create_guide(img, cell_bottom - margin_size, "horizontal")
+                
+                # Center guide for spread type
+                if cell_type.lower() == "spread":
+                    cell_center_x = cell_left + (cell_right - cell_left) / 2
+                    create_guide(img, int(cell_center_x), "vertical")
+                
+                write_log("Guides created for cell")
+            except Exception as guide_error:
+                write_log("WARNING: Could not create guides: {0}".format(guide_error))
         
         write_log("====== Image placed successfully ======")
         return True
@@ -810,27 +850,141 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
         # Resize canvas
         pdb.gimp_image_resize(img, new_width, new_height, 0, 0)
         
-        # Resize structure layers only
-        structure_layers = []
+        # Find existing layers to update
+        write_log("Finding existing layers to update...")
+        board_elements_group = None
+        mask_layer = None
+        borders_layer = None
+        gutters_layer = None
+        simple_page_group = None
+        background_layer = None
+        overlay_group = None
+        structure_layers_to_resize = []
+        
+        # Find Board Elements group and its sub-layers + Background
         for layer in img.layers:
             layer_name = pdb.gimp_item_get_name(layer)
-            if layer_name in ["Background", "Mask", "Borders", "Gutters"]:
-                structure_layers.append(layer)
-            elif pdb.gimp_item_is_group(layer) and layer_name == "Board Elements":
-                for child in layer.children:
-                    child_name = pdb.gimp_item_get_name(child)
-                    if child_name in ["Mask", "Borders", "Gutters"]:
-                        structure_layers.append(child)
-                    elif pdb.gimp_item_is_group(child) and child_name == "Simple page Mask":
-                        for mask_child in child.children:
-                            if not pdb.gimp_item_is_group(mask_child):
-                                structure_layers.append(mask_child)
+            
+            # Find Background layer
+            if layer_name == "Background":
+                background_layer = layer
+                structure_layers_to_resize.append(layer)
+                write_log("Found Background layer")
+            
+            # Find Board Elements group
+            if pdb.gimp_item_is_group(layer):
+                if layer_name == "Board Elements":
+                    board_elements_group = layer
+                    write_log("Found Board Elements group")
+                    
+                    # Find sub-layers
+                    for child in layer.children:
+                        child_name = pdb.gimp_item_get_name(child)
+                        if child_name == "Mask":
+                            mask_layer = child
+                            structure_layers_to_resize.append(child)
+                            write_log("Found Mask layer")
+                        elif child_name == "Borders":
+                            borders_layer = child
+                            structure_layers_to_resize.append(child)
+                            write_log("Found Borders layer")
+                        elif child_name == "Gutters":
+                            gutters_layer = child
+                            structure_layers_to_resize.append(child)
+                            write_log("Found Gutters layer")
+                        elif pdb.gimp_item_is_group(child) and child_name == "Simple page Mask":
+                            simple_page_group = child
+                            write_log("Found Simple page Mask group")
+                            # Add all individual masks
+                            for mask_child in child.children:
+                                if not pdb.gimp_item_is_group(mask_child):
+                                    structure_layers_to_resize.append(mask_child)
+                        elif pdb.gimp_item_is_group(child) and child_name == "Overlay":
+                            overlay_group = child
+                            write_log("Found Overlay group")
         
-        for layer in structure_layers:
+        # Resize ONLY structure layers
+        write_log("Resizing {0} structure layers to match new canvas...".format(len(structure_layers_to_resize)))
+        for layer in structure_layers_to_resize:
             try:
-                pdb.gimp_layer_resize(layer, new_width, new_height, 0, 0)
-            except:
-                pass
+                layer_name = pdb.gimp_item_get_name(layer)
+                old_layer_width = pdb.gimp_drawable_width(layer)
+                old_layer_height = pdb.gimp_drawable_height(layer)
+                
+                if old_layer_width != new_width or old_layer_height != new_height:
+                    pdb.gimp_layer_resize(layer, new_width, new_height, 0, 0)
+                    write_log("Resized structure layer '{0}' from {1}x{2} to {3}x{4}".format(
+                        layer_name, old_layer_width, old_layer_height, new_width, new_height))
+            except Exception as e:
+                write_log("WARNING: Could not resize structure layer: {0}".format(e))
+        
+        write_log("Structure layers resized successfully")
+        
+        # Get margin from metadata
+        px_margin = safe_int(metadata.get('adjustedMargin', 0))
+        write_log("Using margin from metadata: {0}px".format(px_margin))
+        
+        # FILL newly created canvas areas with appropriate colors
+        write_log("Filling newly created canvas areas with appropriate colors...")
+        
+        if effective_direction == 1:  # Right - vertical zone on the right
+            new_area_x = old_width
+            new_area_y = 0
+            new_area_width = new_width - old_width
+            new_area_height = old_height
+        else:  # Bottom (0) - horizontal zone at the bottom
+            new_area_x = 0
+            new_area_y = old_height
+            new_area_width = old_width
+            new_area_height = new_height - old_height
+        
+        write_log("New area to fill: ({0},{1}) size {2}x{3}".format(
+            new_area_x, new_area_y, new_area_width, new_area_height))
+        
+        # Fill Mask layer with black (layout color)
+        if mask_layer and new_area_width > 0 and new_area_height > 0:
+            try:
+                write_log("Filling new area in Mask layer")
+                img.active_layer = mask_layer
+                pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                               int(new_area_x), int(new_area_y),
+                                               int(new_area_width), int(new_area_height))
+                pdb.gimp_context_set_foreground((0, 0, 0))  # Black
+                pdb.gimp_edit_fill(mask_layer, FILL_FOREGROUND)
+                pdb.gimp_selection_none(img)
+                write_log("Mask layer filled in new area")
+            except Exception as e:
+                write_log("WARNING: Could not fill Mask layer new area: {0}".format(e))
+        
+        # Fill Borders layer with gray (border color)
+        if borders_layer and new_area_width > 0 and new_area_height > 0:
+            try:
+                write_log("Filling new area in Borders layer")
+                img.active_layer = borders_layer
+                pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                               int(new_area_x), int(new_area_y),
+                                               int(new_area_width), int(new_area_height))
+                pdb.gimp_context_set_foreground((200, 200, 200))  # Light gray
+                pdb.gimp_edit_fill(borders_layer, FILL_FOREGROUND)
+                pdb.gimp_selection_none(img)
+                write_log("Borders layer filled in new area")
+            except Exception as e:
+                write_log("WARNING: Could not fill Borders layer new area: {0}".format(e))
+        
+        # Fill Background layer with white
+        if background_layer and new_area_width > 0 and new_area_height > 0:
+            try:
+                write_log("Filling new area in Background layer")
+                img.active_layer = background_layer
+                pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                               int(new_area_x), int(new_area_y),
+                                               int(new_area_width), int(new_area_height))
+                pdb.gimp_context_set_foreground((255, 255, 255))  # White
+                pdb.gimp_edit_fill(background_layer, FILL_FOREGROUND)
+                pdb.gimp_selection_none(img)
+                write_log("Background layer filled in new area")
+            except Exception as e:
+                write_log("WARNING: Could not fill Background layer new area: {0}".format(e))
         
         # Update .board file
         try:
@@ -879,6 +1033,172 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
             write_log("ERROR updating .board file: {0}".format(e))
             return False
         
+        # UPDATE LAYERS for each new cell
+        for new_cell in new_cells:
+            cell_lx = int(new_cell['minX'])
+            cell_rx = int(new_cell['maxX'])
+            cell_ty = int(new_cell['minY'])
+            cell_by = int(new_cell['maxY'])
+            cell_width_calc = cell_rx - cell_lx
+            cell_height_calc = cell_by - cell_ty
+            
+            write_log("Updating layers for new cell {0}: ({1},{2}) -> ({3},{4})".format(
+                new_cell['index'], cell_lx, cell_ty, cell_rx, cell_by))
+            
+            # 1. Update Mask layer - Create a "hole" for the cell
+            if mask_layer:
+                try:
+                    write_log("Creating hole in Mask layer")
+                    img.active_layer = mask_layer
+                    pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE, 
+                                                   cell_lx, cell_ty, cell_width_calc, cell_height_calc)
+                    pdb.gimp_edit_clear(mask_layer)
+                    pdb.gimp_selection_none(img)
+                    write_log("Hole created in Mask layer")
+                except Exception as e:
+                    write_log("WARNING: Could not update Mask layer: {0}".format(e))
+            
+            # 2. Update Borders layer - Create a "hole" with margins
+            if borders_layer and px_margin > 0:
+                try:
+                    write_log("Creating hole in Borders layer with margin: {0}px".format(px_margin))
+                    inner_x = cell_lx + int(px_margin)
+                    inner_y = cell_ty + int(px_margin)
+                    inner_width = cell_width_calc - int(2 * px_margin)
+                    inner_height = cell_height_calc - int(2 * px_margin)
+                    
+                    img.active_layer = borders_layer
+                    pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                                   inner_x, inner_y, inner_width, inner_height)
+                    pdb.gimp_edit_clear(borders_layer)
+                    pdb.gimp_selection_none(img)
+                    write_log("Hole created in Borders layer")
+                except Exception as e:
+                    write_log("WARNING: Could not update Borders layer: {0}".format(e))
+            
+            # 3. Create Simple page Mask for the new cell (spread mode only)
+            if cell_type.lower() == "spread" and simple_page_group:
+                try:
+                    # Use row/col stored in new_cell (calculated during creation)
+                    row = new_cell.get('row', None)
+                    col = new_cell.get('col', None)
+                    
+                    # Fallback: if row/col not in new_cell, calculate from index
+                    if row is None or col is None:
+                        cell_index = new_cell['index']
+                        row = ((cell_index - 1) // nbr_cols) + 1
+                        col = ((cell_index - 1) % nbr_cols) + 1
+                        write_log("WARNING: Using fallback row/col calculation for cell {0}".format(cell_index))
+                    
+                    mask_name = "R{0}C{1}".format(row, col)
+                    write_log("Creating Simple page mask layer: {0} (row={1}, col={2})".format(mask_name, row, col))
+                    
+                    # Create mask layer
+                    mask_layer_spm = pdb.gimp_layer_new(img, new_width, new_height,
+                                                        RGBA_IMAGE, mask_name, 100, NORMAL_MODE)
+                    pdb.gimp_image_insert_layer(img, mask_layer_spm, simple_page_group, 0)
+                    
+                    # Fill mask with rectangle at center of cell
+                    middle_x = cell_lx + (cell_width_calc / 2)
+                    rect_x = int(middle_x - px_margin)
+                    rect_y = cell_ty
+                    rect_width = int(2 * px_margin)
+                    rect_height = cell_height_calc
+                    
+                    img.active_layer = mask_layer_spm
+                    pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                                   rect_x, rect_y, rect_width, rect_height)
+                    # Use border color (same color as in original board)
+                    pdb.gimp_context_set_foreground(border_color)
+                    pdb.gimp_edit_fill(mask_layer_spm, FILL_FOREGROUND)
+                    pdb.gimp_selection_none(img)
+                    
+                    # Make invisible by default
+                    pdb.gimp_item_set_visible(mask_layer_spm, False)
+                    
+                    write_log("Simple page mask {0} created and filled".format(mask_name))
+                except Exception as e:
+                    write_log("WARNING: Could not create Simple page mask: {0}".format(e))
+            
+            # 4. Create gutter for the new cell (spread mode only)
+            if cell_type.lower() == "spread" and gutters_layer:
+                try:
+                    write_log("Creating gutter for new cell")
+                    middle_x = cell_lx + (cell_width_calc / 2)
+                    gutter_width = max(2, int(round(cell_width_calc / 500.0)))  # At least 2 pixels
+                    gutter_height = int(cell_height_calc * 0.9)
+                    gutter_y_offset = int((cell_height_calc - gutter_height) / 2)
+                    
+                    gutter_x = int(middle_x - gutter_width / 2)
+                    gutter_y = cell_ty + gutter_y_offset
+                    
+                    write_log("Gutter dimensions: {0}x{1} at ({2},{3})".format(
+                        gutter_width, gutter_height, gutter_x, gutter_y))
+                    
+                    img.active_layer = gutters_layer
+                    pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE,
+                                                   gutter_x, gutter_y, gutter_width, gutter_height)
+                    pdb.gimp_context_set_foreground((34, 34, 34))  # Color 222222
+                    pdb.gimp_edit_fill(gutters_layer, FILL_FOREGROUND)
+                    pdb.gimp_selection_none(img)
+                    
+                    write_log("Gutter created successfully")
+                except Exception as e:
+                    write_log("WARNING: Could not create gutter: {0}".format(e))
+        
+        write_log("All visual elements updated for new cells")
+        
+        # REPOSITION LEGEND (like in Photoshop script)
+        try:
+            write_log("Searching for Legend layer to reposition...")
+            legend_layer = None
+            
+            # Search for Legend layer in Board Elements group
+            if board_elements_group:
+                for child in board_elements_group.children:
+                    if pdb.gimp_item_get_name(child) == "Legend":
+                        legend_layer = child
+                        write_log("Found Legend layer in Board Elements group")
+                        break
+            
+            # If Legend not in Board Elements, search at root level
+            if not legend_layer:
+                for layer in img.layers:
+                    if not pdb.gimp_item_is_group(layer) and pdb.gimp_item_get_name(layer) == "Legend":
+                        legend_layer = layer
+                        write_log("Found Legend layer at root level")
+                        break
+            
+            if legend_layer:
+                # Get current position of legend
+                current_x, current_y = pdb.gimp_drawable_offsets(legend_layer)
+                write_log("Legend current position: ({0}, {1})".format(current_x, current_y))
+                
+                # Calculate displacement according to extension direction (identical logic to Photoshop)
+                if effective_direction == 1:  # Right
+                    # Extension to the right: move by cell width + spacing
+                    horizontal_offset = cell_width + layout_spacing
+                    new_x = int(current_x + horizontal_offset)
+                    new_y = current_y
+                    write_log("Moving legend RIGHT by {0}px (cell_width + layout_spacing)".format(horizontal_offset))
+                else:  # Bottom (0)
+                    # Extension to the bottom: move by cell height + spacing
+                    vertical_offset = cell_height + layout_spacing
+                    new_x = current_x
+                    new_y = int(current_y + vertical_offset)
+                    write_log("Moving legend DOWN by {0}px (cell_height + layout_spacing)".format(vertical_offset))
+                
+                # Apply displacement
+                pdb.gimp_layer_set_offsets(legend_layer, new_x, new_y)
+                write_log("Legend repositioned to: ({0}, {1})".format(new_x, new_y))
+            else:
+                write_log("Legend layer not found, skipping repositioning")
+                
+        except Exception as e:
+            write_log("WARNING: Could not reposition Legend layer: {0}".format(e))
+            import traceback
+            write_log("Traceback: {0}".format(traceback.format_exc()))
+        
         pdb.gimp_displays_flush()
         
         # Save direction for alternate mode
@@ -902,7 +1222,7 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
 # ============================================================================
 
 def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell, 
-                          auto_extend=False, extension_direction=0, user_overlay_files=None):
+                          auto_extend=False, extension_direction=0, user_overlay_files=None, should_create_guides=False):
     """Main import function"""
     global log_file_path
     
@@ -988,7 +1308,7 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
                 break
             
             success = place_image_in_cell(img, image_file, empty_cell, cell_type, 
-                                         resize_mode, metadata, cells, use_side)
+                                         resize_mode, metadata, cells, use_side, should_create_guides)
             
             if success:
                 images_placed += 1
@@ -1035,7 +1355,7 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
 
 def import_board_ui(img, drawable, import_mode, image_folder, image_file, image_pattern, 
                    cell_type, resize_mode, start_cell, overlay_enabled, overlay_file, 
-                   overlay_folder, auto_extend, extension_direction):
+                   overlay_folder, auto_extend, extension_direction, should_create_guides):
     """User interface for import"""
     
     image_files = []
@@ -1100,7 +1420,7 @@ def import_board_ui(img, drawable, import_mode, image_folder, image_file, image_
     pdb.gimp_progress_init("Importing {0} image(s)...".format(len(image_files)), None)
     
     import_images_to_board(img, image_files, cell_type_str, resize_mode_str, start_cell, 
-                          auto_extend, extension_direction, user_overlay_files)
+                          auto_extend, extension_direction, user_overlay_files, should_create_guides)
 
 # ============================================================================
 # PLUGIN REGISTRATION
@@ -1128,7 +1448,8 @@ register(
         (PF_FILE, "overlay_file", "Overlay File", ""),
         (PF_DIRNAME, "overlay_folder", "Overlay Folder", ""),
         (PF_TOGGLE, "auto_extend", "─────────── ⚙️  EXTENSION ───────────\nAuto-extend", False),
-        (PF_OPTION, "extension_direction", "Direction", 2, ["Bottom", "Right", "Alternate"])
+        (PF_OPTION, "extension_direction", "Direction", 2, ["Bottom", "Right", "Alternate"]),
+        (PF_TOGGLE, "should_create_guides", "─────────── ⚙️  OPTIONS ───────────\nCreate Guides", False)
     ],
     [],
     import_board_ui
