@@ -46,8 +46,31 @@
 #### Prerequisites
 - GIMP 2.10 or higher
 - Python 2.7 (included with GIMP)
+- Python 3 (for the installer script)
 
-#### Script Installation
+#### 🚀 Quick Install (Recommended)
+
+**macOS / Linux:**
+```bash
+cd /path/to/OPENBOARD
+./install.sh
+```
+
+**Windows:**
+```cmd
+cd C:\path\to\OPENBOARD
+install.bat
+```
+
+The installer will:
+- ✓ Check if GIMP is installed (offer to download if not)
+- ✓ Automatically locate your GIMP plugin directory
+- ✓ Copy all scripts to the correct location
+- ✓ Set proper permissions
+
+👉 **For detailed installation instructions, see [INSTALL.md](INSTALL.md)**
+
+#### 📦 Manual Installation
 
 1. **Download the scripts** from this repository
 
@@ -144,7 +167,11 @@ OpenBoard/
 │   ├── createOpenBoard.py      # Board creation
 │   ├── importOpenBoard.py      # Image import
 │   └── addImageNames.py        # Name addition
+├── install.py                  # Installation script (Python)
+├── install.sh                  # Installation script (macOS/Linux)
+├── install.bat                 # Installation script (Windows)
 ├── README.md                   # This file
+├── INSTALL.md                  # Detailed installation guide
 └── LICENSE                     # MIT License
 ```
 
@@ -252,8 +279,31 @@ MIT License - see LICENSE file for details
 #### Prérequis
 - GIMP 2.10 ou supérieur
 - Python 2.7 (inclus avec GIMP)
+- Python 3 (pour le script d'installation)
 
-#### Installation des scripts
+#### 🚀 Installation rapide (Recommandé)
+
+**macOS / Linux :**
+```bash
+cd /chemin/vers/OPENBOARD
+./install.sh
+```
+
+**Windows :**
+```cmd
+cd C:\chemin\vers\OPENBOARD
+install.bat
+```
+
+Le programme d'installation va :
+- ✓ Vérifier si GIMP est installé (propose le téléchargement sinon)
+- ✓ Localiser automatiquement votre dossier de plugins GIMP
+- ✓ Copier tous les scripts au bon endroit
+- ✓ Définir les permissions appropriées
+
+👉 **Pour des instructions détaillées, voir [INSTALL.md](INSTALL.md)**
+
+#### 📦 Installation manuelle
 
 1. **Téléchargez les scripts** depuis ce dépôt
 
@@ -350,7 +400,11 @@ OpenBoard/
 │   ├── createOpenBoard.py      # Création de boards
 │   ├── importOpenBoard.py      # Import d'images
 │   └── addImageNames.py        # Ajout de noms
+├── install.py                  # Script d'installation (Python)
+├── install.sh                  # Script d'installation (macOS/Linux)
+├── install.bat                 # Script d'installation (Windows)
 ├── README.md                   # Ce fichier
+├── INSTALL.md                  # Guide d'installation détaillé
 └── LICENSE                     # Licence MIT
 ```
 
