@@ -1,4 +1,4 @@
-# Open Board - GIMP Scripts
+# Open Board - GIMP 2.10 Scripts
 
 [English](#english) | [Français](#français)
 
