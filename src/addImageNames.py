@@ -8,12 +8,11 @@ from gimpfu import *
 import os
 import time
 
-# ============================================================================
-# CONSTANTS
-# ============================================================================
-
-ENABLE_LOGS = True  # Activer/désactiver l'écriture des logs
-POSITION_TOLERANCE = 10  # pixels tolerance for position matching
+# Import du module commun OpenBoard
+from openboard_common import (
+    write_log, convert_hex_to_rgb,
+    ENABLE_LOGS, POSITION_TOLERANCE
+)
 
 # ============================================================================
 # GLOBAL VARIABLES
@@ -22,49 +21,15 @@ POSITION_TOLERANCE = 10  # pixels tolerance for position matching
 log_file_path = None
 
 # ============================================================================
-# UTILITY FUNCTIONS
+# UTILITY FUNCTIONS SPÉCIFIQUES
 # ============================================================================
 
-def write_log(message):
-    """Write log message"""
-    if not ENABLE_LOGS:
-        return
-    
-    global log_file_path
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    full_message = "{0} - {1}".format(timestamp, message)
-    
-    print(full_message)
-    
-    if log_file_path:
-        try:
-            with open(log_file_path, 'a') as f:
-                f.write(full_message + '\n')
-        except Exception as e:
-            print("Error writing log: {0}".format(e))
-
 def remove_file_extension(filename):
-    """Remove file extension from filename"""
+    """Supprimer l'extension d'un nom de fichier"""
     last_dot = filename.rfind('.')
     if last_dot == -1:
         return filename
     return filename[:last_dot]
-
-def convert_color_to_rgb(color_param):
-    """Convert GIMP color parameter to RGB tuple (0-255)"""
-    try:
-        if hasattr(color_param, 'r') and hasattr(color_param, 'g') and hasattr(color_param, 'b'):
-            r = int(color_param.r * 255)
-            g = int(color_param.g * 255)
-            b = int(color_param.b * 255)
-            return (r, g, b)
-        elif isinstance(color_param, (tuple, list)) and len(color_param) >= 3:
-            return (int(color_param[0]), int(color_param[1]), int(color_param[2]))
-        else:
-            return (0, 0, 0)
-    except Exception as e:
-        write_log("Error converting color: {0}".format(e))
-        return (0, 0, 0)
 
 # ============================================================================
 # BOARD FILE READING
@@ -220,7 +185,7 @@ def calculate_text_position(cell, cell_type, layer_info, text_offset):
 # ============================================================================
 
 def add_image_names_to_board(img, drawable, text_font, text_size, text_color, text_offset):
-    """Main function to add image names under cells
+    """Main function to add image names under cells - AVEC MEILLEURE GESTION D'ERREURS
     
     Parameters:
     - img: Active GIMP image
@@ -235,8 +200,14 @@ def add_image_names_to_board(img, drawable, text_font, text_size, text_color, te
     try:
         write_log("====== Starting Add Image Names for GIMP ======")
         
-        # Convert color to RGB (0-255)
-        rgb_color = convert_color_to_rgb(text_color)
+        # Validation des paramètres
+        if text_size <= 0:
+            raise ValueError("Text size must be positive")
+        if text_offset < 0:
+            raise ValueError("Text offset cannot be negative")
+        
+        # Convert color to RGB (0-255) - utilise le module commun
+        rgb_color = convert_hex_to_rgb(text_color)
         write_log("Text settings - Font: {0}, Size: {1}, Color: RGB{2}, Offset: {3}px".format(
             text_font, text_size, rgb_color, text_offset))
         
@@ -447,11 +418,28 @@ def add_image_names_to_board(img, drawable, text_font, text_size, text_color, te
         
         # pdb.gimp_message("Image names added successfully! ({0} images)".format(len(content_layers)))
         
+    except ValueError as e:
+        # Erreur de validation des paramètres
+        pdb.gimp_message("Invalid parameter: {0}".format(e))
+        write_log("Validation error: {0}".format(e))
+        try:
+            pdb.gimp_image_undo_group_end(img)
+        except:
+            pass
+    except IOError as e:
+        # Erreur de fichier
+        pdb.gimp_message("File error: {0}".format(e))
+        write_log("File error: {0}".format(e))
+        try:
+            pdb.gimp_image_undo_group_end(img)
+        except:
+            pass
     except Exception as e:
+        # Erreur inattendue
         write_log("ERROR in add_image_names_to_board: {0}".format(e))
         import traceback
         write_log("Traceback: {0}".format(traceback.format_exc()))
-        # pdb.gimp_message("Error adding image names: {0}".format(e))
+        pdb.gimp_message("Error adding image names: {0}".format(e))
         
         # End undo group on error
         try:

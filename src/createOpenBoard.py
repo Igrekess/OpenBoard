@@ -11,17 +11,24 @@ import json
 import math
 import re
 
+# Import du module commun OpenBoard
+from openboard_common import (
+    write_log, safe_float, safe_int,
+    sanitize_filename, convert_hex_to_rgb, convert_rgb_to_gimp_color,
+    find_overlay_files, get_image_orientation, create_guide,
+    calculate_overlay_dimensions, place_overlay_in_cell,
+    get_overlay_index_for_cell,
+    ENABLE_LOGS, IMAGE_EXTENSIONS, DEFAULT_DPI
+)
+
 # ============================================================================
-# CONSTANTS
+# CONSTANTS SPÉCIFIQUES À createOpenBoard
 # ============================================================================
 
-ENABLE_LOGS = True  # Activer/désactiver l'écriture des logs
-DEFAULT_DPI = 72.0
 DEFAULT_SPACING = 40.0
 GUTTER_MIN_WIDTH = 2
 GUTTER_WIDTH_DIVISOR = 500
 GUTTER_HEIGHT_RATIO = 0.9
-IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.xcf', '.psd', '.bmp', '.gif']
 GUTTER_COLOR = (34, 34, 34)
 MIN_LEGEND_MARGIN = 60  # Marge minimale en bas pour la légende (en pixels)
 MIN_LOGO_MARGIN = 60  # Marge minimale en haut pour le logo (en pixels)
@@ -34,56 +41,11 @@ global_dest_folder = None
 log_file_cleared = False
 
 # ============================================================================
-# UTILITY FUNCTIONS
+# UTILITY FUNCTIONS SPÉCIFIQUES
 # ============================================================================
 
-def sanitize_filename(filename):
-    """Sanitize filename to prevent path traversal"""
-    filename = os.path.basename(filename)
-    filename = re.sub(r'[^\w\s\-.]', '', filename)
-    return filename
-
-def safe_float(value, default=0.0):
-    """Safely convert to float"""
-    try:
-        result = float(value)
-        if math.isnan(result) or math.isinf(result):
-            return default
-        return result
-    except:
-        return default
-
-def safe_int(value, default=0):
-    """Safely convert to int"""
-    try:
-        return int(safe_float(value, default))
-    except:
-        return default
-
-def write_log(message, log_folder_path=None):
-    """Write log messages"""
-    if not ENABLE_LOGS:
-        return True
-    
-    try:
-        if log_folder_path is None:
-            import tempfile
-            log_folder_path = tempfile.gettempdir()
-        
-        log_file_path = os.path.join(log_folder_path, "board_gimp_log.txt")
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        full_message = "{0} - {1}".format(timestamp, message)
-        
-        with open(log_file_path, 'a') as log_file:
-            log_file.write(full_message + "\n")
-        print(full_message)
-        return True
-    except Exception as e:
-        print("Error writing to log: {0}".format(e))
-        return False
-
 def ensure_folder_exists(folder_path):
-    """Ensure folder exists"""
+    """Assurer que le dossier existe (crée si nécessaire)"""
     try:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -92,27 +54,6 @@ def ensure_folder_exists(folder_path):
     except Exception as e:
         write_log("Error creating folder: {0}".format(e))
         return None
-
-def convert_hex_to_rgb(hex_color):
-    """Convert hex color to RGB (0-255)"""
-    if hasattr(hex_color, 'r') and hasattr(hex_color, 'g') and hasattr(hex_color, 'b'):
-        return (int(hex_color.r * 255), int(hex_color.g * 255), int(hex_color.b * 255))
-    elif isinstance(hex_color, (tuple, list)) and len(hex_color) >= 3:
-        return (int(hex_color[0]), int(hex_color[1]), int(hex_color[2]))
-    
-    try:
-        hex_color = str(hex_color).lstrip('#')
-        if len(hex_color) != 6:
-            write_log("Invalid hex color: {0}, using white".format(hex_color))
-            return (255, 255, 255)
-        return (int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16))
-    except Exception as e:
-        write_log("Error converting color: {0}".format(e))
-        return (255, 255, 255)
-
-def convert_rgb_to_gimp_color(rgb):
-    """Convert RGB to GIMP color (0.0-1.0)"""
-    return (rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0)
 
 def convert_to_pixels(value, unit, resolution):
     """Convert dimensions to pixels"""
@@ -149,7 +90,7 @@ def write_cell_coordinates(rectangle, dit_path, cell_number):
         write_log("Error writing cell: {0}".format(e))
 
 def remove_dit_file(file_path):
-    """Remove .board file if exists"""
+    """Supprimer le fichier .board s'il existe"""
     try:
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -158,37 +99,6 @@ def remove_dit_file(file_path):
     except Exception as e:
         write_log("Error removing .board file: {0}".format(e))
         return False
-
-def find_overlay_files(path):
-    """Find overlay files"""
-    try:
-        if not path or not os.path.exists(path):
-            return []
-        
-        if os.path.isfile(path):
-            return [path]
-        
-        if os.path.isdir(path):
-            overlay_files = []
-            for filename in os.listdir(path):
-                file_path = os.path.join(path, filename)
-                if os.path.isfile(file_path):
-                    ext = os.path.splitext(filename)[1].lower()
-                    if ext in IMAGE_EXTENSIONS:
-                        overlay_files.append(file_path)
-            overlay_files.sort()
-            return overlay_files
-        return []
-    except Exception as e:
-        write_log("Error finding overlays: {0}".format(e))
-        return []
-
-def create_guide(img, position, orientation):
-    """Create guide"""
-    if orientation == "horizontal":
-        pdb.gimp_image_add_hguide(img, position)
-    else:
-        pdb.gimp_image_add_vguide(img, position)
 
 def fill_selection_with_color(img, drawable, rgb_color):
     """Fill selection with color"""
@@ -206,65 +116,80 @@ def create_rectangular_selection(img, rectangle):
     pdb.gimp_image_select_rectangle(img, CHANNEL_OP_REPLACE, x, y, width, height)
     return True
 
-def get_image_orientation(image_path):
-    """Get image orientation"""
-    try:
-        temp_img = pdb.gimp_file_load(image_path, image_path)
-        width = temp_img.width
-        height = temp_img.height
-        pdb.gimp_image_delete(temp_img)
-        return "Landscape" if width > height else "Portrait" if height > width else "Square"
-    except:
-        return "Landscape"
+# NOTE: Les fonctions get_image_orientation(), calculate_overlay_dimensions(),
+# place_overlay_in_cell(), et get_overlay_index_for_cell() sont maintenant
+# importées depuis openboard_common
 
-def calculate_overlay_dimensions(cell_width, cell_height, cell_type, orientation, margin):
-    """Calculate overlay dimensions"""
-    result = {
-        'position': 'center',
-        'dimensions': {'width': cell_width, 'height': cell_height, 'x': 0, 'y': 0}
-    }
+# ============================================================================
+# VALIDATION
+# ============================================================================
+
+def validate_board_parameters(board_name, nbr_col, nbr_row, cell_width, 
+                              cell_height, dest_folder):
+    """Valider tous les paramètres avant de créer le board.
     
-    if cell_type.lower() == "spread" and orientation == "Portrait":
-        half_width = cell_width / 2
-        result['position'] = 'split'
-        result['dimensions'] = {
-            'left': {'width': half_width, 'height': cell_height, 'x': 0, 'y': 0},
-            'right': {'width': half_width, 'height': cell_height, 'x': half_width, 'y': 0}
-        }
-    return result
-
-def place_overlay_in_cell(img, overlay_path, cell_x, cell_y, cell_width, cell_height, 
-                          cell_type, overlay_group, position_info):
-    """Place overlay in cell"""
-    try:
-        overlay_img = pdb.gimp_file_load(overlay_path, overlay_path)
-        overlay_layer = overlay_img.active_layer if overlay_img.active_layer else overlay_img.layers[0]
+    Vérifie la validité de tous les paramètres et retourne le board_name nettoyé.
+    
+    Args:
+        board_name (str): Nom du board
+        nbr_col (int): Nombre de colonnes
+        nbr_row (int): Nombre de rangées
+        cell_width (float): Largeur de cellule
+        cell_height (float): Hauteur de cellule
+        dest_folder (str): Dossier de destination
         
-        new_layer = pdb.gimp_layer_new_from_drawable(overlay_layer, img)
-        pdb.gimp_image_insert_layer(img, new_layer, overlay_group, 0)
+    Returns:
+        str: board_name sanitized
         
-        overlay_name = os.path.splitext(os.path.basename(overlay_path))[0]
-        pdb.gimp_item_set_name(new_layer, "Overlay_{0}".format(overlay_name))
+    Raises:
+        ValueError: Si un paramètre est invalide (avec message explicite)
         
-        if position_info['position'] == 'center':
-            dims = position_info['dimensions']
-            pdb.gimp_layer_scale(new_layer, int(dims['width']), int(dims['height']), True)
-            pdb.gimp_layer_set_offsets(new_layer, int(cell_x), int(cell_y))
-        
-        pdb.gimp_image_delete(overlay_img)
-        return new_layer
-    except Exception as e:
-        write_log("Error placing overlay: {0}".format(e))
-        return None
-
-def get_overlay_index_for_cell(row, col, nbr_cols, overlay_count, cell_type):
-    """Get overlay index for cell"""
-    if overlay_count == 0:
-        return 0
-    cell_number = (row - 1) * nbr_cols + (col - 1)
-    if cell_type.lower() == "spread":
-        return ((cell_number % 2) * 2) % overlay_count
-    return cell_number % overlay_count
+    Example:
+        >>> board_name = validate_board_parameters("My Board", 3, 4, 800, 600, "/path")
+        >>> print(board_name)
+        "My Board"
+    """
+    # Validation du nom
+    if not board_name or not isinstance(board_name, str):
+        raise ValueError("Board name is required and must be a string")
+    
+    board_name = sanitize_filename(board_name.strip())
+    if not board_name:
+        raise ValueError("Board name is invalid after sanitization")
+    
+    # Validation des dimensions de la grille
+    MAX_CELLS = 500
+    total_cells = nbr_col * nbr_row
+    if total_cells > MAX_CELLS:
+        raise ValueError(
+            "Board too large: {0} cells (max {1}). Reduce rows or columns.".format(
+                total_cells, MAX_CELLS))
+    
+    if nbr_col < 1 or nbr_col > 50:
+        raise ValueError("Columns must be between 1 and 50")
+    
+    if nbr_row < 1 or nbr_row > 50:
+        raise ValueError("Rows must be between 1 and 50")
+    
+    # Validation des dimensions de cellule
+    if cell_width <= 0:
+        raise ValueError("Cell width must be positive")
+    
+    if cell_height <= 0:
+        raise ValueError("Cell height must be positive")
+    
+    # Validation du dossier de destination
+    if not dest_folder or not isinstance(dest_folder, str):
+        raise ValueError("Destination folder is required")
+    
+    if not os.path.exists(dest_folder):
+        try:
+            os.makedirs(dest_folder)
+            write_log("Created destination folder: {0}".format(dest_folder))
+        except OSError as e:
+            raise ValueError("Cannot create destination folder: {0}".format(e))
+    
+    return board_name
 
 def write_overlay_metadata_to_dit(dit_path, overlay_files, overlay_indexes):
     """Write overlay metadata"""
@@ -302,29 +227,29 @@ def create_board_layout(board_name, dest_folder,
                        logo_folder_path,
                        overlay_mask_on, overlay_file_path, overlay_folder_path,
                        should_create_guides):
-    """Main function to create board layout"""
+    """Main function to create board layout - AVEC VALIDATION ROBUSTE"""
     
     write_log("Open Board - Layout Creator started")
     
-    # Sanitize and validate
-    board_name = sanitize_filename(board_name)
-    if not board_name:
-        pdb.gimp_message("Invalid board name")
+    try:
+        # 🔥 VALIDATION EN PREMIER (avant toute opération)
+        board_name = validate_board_parameters(
+            board_name, nbr_col, nbr_row, cell_width, cell_height, dest_folder)
+        
+        write_log("Creating board: {0}".format(board_name))
+        
+    except ValueError as e:
+        # Erreur de validation : message clair pour l'utilisateur
+        pdb.gimp_message(str(e))
+        write_log("Validation error: {0}".format(e))
         return
-    
-    # Validate destination folder
-    if not dest_folder or not isinstance(dest_folder, str) or dest_folder.strip() == "":
-        pdb.gimp_message("Please select a destination folder")
+    except Exception as e:
+        # Erreur inattendue pendant la validation
+        write_log("Unexpected error during validation: {0}".format(e))
+        import traceback
+        write_log("Traceback: {0}".format(traceback.format_exc()))
+        pdb.gimp_message("Error validating parameters: {0}".format(e))
         return
-    
-    # Ensure destination folder exists
-    if not os.path.exists(dest_folder):
-        try:
-            os.makedirs(dest_folder)
-            write_log("Created destination folder: {0}".format(dest_folder))
-        except Exception as e:
-            pdb.gimp_message("Cannot create destination folder: {0}".format(e))
-            return
     
     # Convert parameters
     units_list = ["px", "mm", "cm", "in", "pt"]
@@ -606,21 +531,27 @@ def create_board_layout(board_name, dest_folder,
                     if position_info['position'] == 'center':
                         place_overlay_in_cell(img, overlay_path, x, y, px_cell_width, px_cell_height, cell_type, overlay_group, position_info)
                     elif position_info['position'] == 'split':
+                        # Overlay gauche
                         left_info = {'position': 'center', 'dimensions': position_info['dimensions']['left']}
                         place_overlay_in_cell(img, overlay_path, x, y, 
                             safe_int(position_info['dimensions']['left']['width']),
                             safe_int(position_info['dimensions']['left']['height']),
                             cell_type, overlay_group, left_info)
                         
+                        # Overlay droit (même fichier si un seul overlay, sinon fichier suivant)
                         if len(overlay_files) > 1:
                             next_index = (overlay_index + 1) % len(overlay_files)
                             next_overlay_path = overlay_files[next_index]
-                            right_info = {'position': 'center', 'dimensions': position_info['dimensions']['right']}
-                            place_overlay_in_cell(img, next_overlay_path,
-                                safe_int(x + position_info['dimensions']['right']['x']), y,
-                                safe_int(position_info['dimensions']['right']['width']),
-                                safe_int(position_info['dimensions']['right']['height']),
-                                cell_type, overlay_group, right_info)
+                        else:
+                            # Un seul overlay : utiliser le même fichier pour les deux côtés
+                            next_overlay_path = overlay_path
+                        
+                        right_info = {'position': 'center', 'dimensions': position_info['dimensions']['right']}
+                        place_overlay_in_cell(img, next_overlay_path,
+                            safe_int(x + position_info['dimensions']['right']['x']), y,
+                            safe_int(position_info['dimensions']['right']['width']),
+                            safe_int(position_info['dimensions']['right']['height']),
+                            cell_type, overlay_group, right_info)
                 except Exception as e:
                     write_log("Error placing overlay: {0}".format(e))
             

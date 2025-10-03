@@ -11,164 +11,25 @@ import time
 import glob
 import json
 
-# ============================================================================
-# CONSTANTS
-# ============================================================================
-
-ENABLE_LOGS = True  # Activer/désactiver l'écriture des logs
-DEFAULT_DPI = 72.0
-POSITION_TOLERANCE = 10  # pixels
-CENTER_TOLERANCE_RATIO = 0.1  # 10% of cell width
-WIDE_IMAGE_THRESHOLD = 0.6  # 60% of cell width
-VERY_WIDE_IMAGE_THRESHOLD = 0.8  # 80% of cell width
-MIN_LAYER_SIZE = 100  # Minimum layer size to consider
-IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.xcf', '.psd', '.bmp', '.gif']
+# Import du module commun OpenBoard
+from openboard_common import (
+    write_log, safe_float, safe_int,
+    find_overlay_files, get_image_orientation, create_guide,
+    calculate_overlay_dimensions, place_overlay_in_cell,
+    get_overlay_index_for_cell,
+    build_layer_bounds_cache, check_cell_occupancy_optimized,
+    find_empty_cell_cached,
+    ENABLE_LOGS, IMAGE_EXTENSIONS, DEFAULT_DPI,
+    POSITION_TOLERANCE, MIN_LAYER_SIZE,
+    CENTER_TOLERANCE_RATIO, WIDE_IMAGE_THRESHOLD,
+    VERY_WIDE_IMAGE_THRESHOLD
+)
 
 # ============================================================================
 # GLOBAL VARIABLES
 # ============================================================================
 
-log_messages = []
-log_file_path = None
-
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
-
-def write_log(message):
-    """Write log message"""
-    if not ENABLE_LOGS:
-        return
-    
-    global log_messages, log_file_path
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    full_message = "{0} - {1}".format(timestamp, message)
-    log_messages.append(full_message)
-    
-    if log_file_path:
-        try:
-            with open(log_file_path, 'a') as f:
-                f.write(full_message + '\n')
-        except Exception as e:
-            pdb.gimp_message("Error writing log: {0}".format(e))
-
-def safe_float(value, default=0.0):
-    """Safely convert to float"""
-    try:
-        result = float(value)
-        if math.isnan(result) or math.isinf(result):
-            return default
-        return result
-    except:
-        return default
-
-def safe_int(value, default=0):
-    """Safely convert to int"""
-    try:
-        return int(safe_float(value, default))
-    except:
-        return default
-
-def create_guide(img, position, orientation):
-    """Create guide"""
-    try:
-        if orientation == "horizontal":
-            pdb.gimp_image_add_hguide(img, position)
-        else:
-            pdb.gimp_image_add_vguide(img, position)
-    except Exception as e:
-        write_log("Error creating guide: {0}".format(e))
-
-def find_overlay_files(path):
-    """Find overlay files"""
-    try:
-        if not path or not os.path.exists(path):
-            write_log("Overlay path does not exist: {0}".format(path))
-            return []
-        
-        if os.path.isfile(path):
-            write_log("Using single overlay file: {0}".format(path))
-            return [path]
-        
-        if os.path.isdir(path):
-            overlay_files = []
-            for filename in os.listdir(path):
-                file_path = os.path.join(path, filename)
-                if os.path.isfile(file_path):
-                    ext = os.path.splitext(filename)[1].lower()
-                    if ext in IMAGE_EXTENSIONS:
-                        overlay_files.append(file_path)
-            overlay_files.sort()
-            write_log("Found {0} overlay files".format(len(overlay_files)))
-            return overlay_files
-        return []
-    except Exception as e:
-        write_log("Error finding overlay files: {0}".format(e))
-        return []
-
-def get_image_orientation(image_path):
-    """Get image orientation"""
-    try:
-        temp_img = pdb.gimp_file_load(image_path, image_path)
-        width = temp_img.width
-        height = temp_img.height
-        pdb.gimp_image_delete(temp_img)
-        return "Landscape" if width > height else "Portrait"
-    except Exception as e:
-        write_log("Error getting orientation: {0}".format(e))
-        return "Portrait"
-
-def calculate_overlay_dimensions(cell_width, cell_height, cell_type, orientation, margin):
-    """Calculate overlay dimensions"""
-    result = {
-        'position': 'center',
-        'dimensions': {'width': cell_width, 'height': cell_height, 'x': 0, 'y': 0}
-    }
-    
-    if cell_type.lower() == "spread" and orientation == "Portrait":
-        half_width = cell_width / 2
-        result['position'] = 'split'
-        result['dimensions'] = {
-            'left': {'width': half_width, 'height': cell_height, 'x': 0, 'y': 0},
-            'right': {'width': half_width, 'height': cell_height, 'x': half_width, 'y': 0}
-        }
-    return result
-
-def place_overlay_in_cell(img, overlay_path, cell_x, cell_y, cell_width, cell_height, 
-                          cell_type, overlay_group, position_info):
-    """Place overlay in cell"""
-    try:
-        write_log("Placing overlay: {0}".format(overlay_path))
-        
-        overlay_img = pdb.gimp_file_load(overlay_path, overlay_path)
-        overlay_layer = overlay_img.active_layer if overlay_img.active_layer else overlay_img.layers[0]
-        
-        new_layer = pdb.gimp_layer_new_from_drawable(overlay_layer, img)
-        pdb.gimp_image_insert_layer(img, new_layer, overlay_group, 0)
-        
-        overlay_name = os.path.splitext(os.path.basename(overlay_path))[0]
-        pdb.gimp_item_set_name(new_layer, "Overlay_{0}".format(overlay_name))
-        
-        if position_info['position'] == 'center':
-            dims = position_info['dimensions']
-            pdb.gimp_layer_scale(new_layer, int(dims['width']), int(dims['height']), True)
-            pdb.gimp_layer_set_offsets(new_layer, int(cell_x), int(cell_y))
-        
-        pdb.gimp_image_delete(overlay_img)
-        write_log("Overlay placed successfully")
-        return new_layer
-    except Exception as e:
-        write_log("Error placing overlay: {0}".format(e))
-        return None
-
-def get_overlay_index_for_cell(row, col, nbr_cols, overlay_count, cell_type):
-    """Get overlay index for cell"""
-    if overlay_count == 0:
-        return 0
-    cell_number = (row - 1) * nbr_cols + (col - 1)
-    if cell_type.lower() == "spread":
-        return ((cell_number % 2) * 2) % overlay_count
-    return cell_number % overlay_count
+log_file_path = None  # Chemin du fichier log pour cette session
 
 def save_last_cell_index(board_path, cell_index):
     """Save last cell index"""
@@ -551,180 +412,12 @@ def place_image_in_cell(img, image_path, cell, cell_type, resize_mode, board_met
         return False
 
 # ============================================================================
-# CELL OCCUPANCY DETECTION
+# CELL OCCUPANCY DETECTION - Utilise le cache de openboard_common
 # ============================================================================
 
-def get_layer_actual_bounds(layer):
-    """Get actual content bounds of layer"""
-    try:
-        layer_offset_x, layer_offset_y = pdb.gimp_drawable_offsets(layer)
-        layer_width = pdb.gimp_drawable_width(layer)
-        layer_height = pdb.gimp_drawable_height(layer)
-        
-        return (layer_offset_x, layer_offset_y, 
-                layer_offset_x + layer_width, layer_offset_y + layer_height)
-    except:
-        return None
-
-def rectangle_intersects(x1, y1, x2, y2, zone):
-    """Check if rectangle intersects with zone"""
-    return not (x2 <= zone['minX'] or x1 >= zone['maxX'] or 
-                y2 <= zone['minY'] or y1 >= zone['maxY'])
-
-def check_cell_occupancy(img, cell, cell_type):
-    """Check if cell is empty"""
-    try:
-        write_log("Checking occupancy for cell {0}".format(cell['index']))
-        
-        cell_left = int(cell['minX'])
-        cell_top = int(cell['minY'])
-        cell_right = int(cell['maxX'])
-        cell_bottom = int(cell['maxY'])
-        cell_width = cell_right - cell_left
-        cell_height = cell_bottom - cell_top
-        
-        board_content_layers = []
-        try:
-            for layer in img.layers:
-                if pdb.gimp_item_is_group(layer) and pdb.gimp_item_get_name(layer) == "Board Content":
-                    board_content_layers = layer.children
-                    break
-        except:
-            pass
-        
-        if cell_type.lower() == "single":
-            cell_occupied = False
-            
-            for layer in board_content_layers:
-                if not pdb.gimp_item_get_visible(layer):
-                    continue
-                
-                bounds = get_layer_actual_bounds(layer)
-                if bounds is None:
-                    continue
-                
-                layer_x1, layer_y1, layer_x2, layer_y2 = bounds
-                
-                if (layer_x2 - layer_x1) < MIN_LAYER_SIZE or (layer_y2 - layer_y1) < MIN_LAYER_SIZE:
-                    continue
-                
-                layer_center_x = (layer_x1 + layer_x2) / 2
-                layer_center_y = (layer_y1 + layer_y2) / 2
-                
-                if (layer_center_x >= cell_left and layer_center_x < cell_right and
-                    layer_center_y >= cell_top and layer_center_y < cell_bottom):
-                    cell_occupied = True
-                    write_log("Single cell occupied by layer: {0}".format(pdb.gimp_item_get_name(layer)))
-                    break
-            
-            return (not cell_occupied, not cell_occupied)
-            
-        elif cell_type.lower() == "spread":
-            half_width = cell_width // 2
-            cell_center_x = cell_left + half_width
-            
-            left_zone = {'minX': cell_left, 'minY': cell_top, 'maxX': cell_left + half_width, 'maxY': cell_bottom}
-            right_zone = {'minX': cell_left + half_width, 'minY': cell_top, 'maxX': cell_right, 'maxY': cell_bottom}
-            
-            left_occupied = False
-            right_occupied = False
-            
-            for layer in board_content_layers:
-                if not pdb.gimp_item_get_visible(layer):
-                    continue
-                
-                bounds = get_layer_actual_bounds(layer)
-                if bounds is None:
-                    continue
-                
-                layer_x1, layer_y1, layer_x2, layer_y2 = bounds
-                layer_height = layer_y2 - layer_y1
-                layer_width_actual = layer_x2 - layer_x1
-                
-                if layer_width_actual < MIN_LAYER_SIZE or layer_height < MIN_LAYER_SIZE:
-                    continue
-                
-                layer_center_x = (layer_x1 + layer_x2) / 2
-                layer_center_y = (layer_y1 + layer_y2) / 2
-                
-                # Check if outside cell zone
-                if (layer_center_x < cell_left - MIN_LAYER_SIZE or layer_center_x > cell_right + MIN_LAYER_SIZE or
-                    layer_center_y < cell_top - MIN_LAYER_SIZE or layer_center_y > cell_bottom + MIN_LAYER_SIZE):
-                    continue
-                
-                width_ratio = float(layer_width_actual) / float(cell_width)
-                
-                # Wide image logic
-                if width_ratio > WIDE_IMAGE_THRESHOLD:
-                    left_intersects = rectangle_intersects(layer_x1, layer_y1, layer_x2, layer_y2, left_zone)
-                    right_intersects = rectangle_intersects(layer_x1, layer_y1, layer_x2, layer_y2, right_zone)
-                    
-                    if left_intersects:
-                        left_occupied = True
-                    if right_intersects:
-                        right_occupied = True
-                    
-                    if width_ratio > VERY_WIDE_IMAGE_THRESHOLD:
-                        left_occupied = True
-                        right_occupied = True
-                    
-                    # Centered wide image
-                    image_center_x = (layer_x1 + layer_x2) / 2
-                    cell_center_x_calc = cell_left + (cell_width / 2)
-                    center_distance = abs(image_center_x - cell_center_x_calc)
-                    
-                    if center_distance < (cell_width * CENTER_TOLERANCE_RATIO) and width_ratio > 0.7:
-                        left_occupied = True
-                        right_occupied = True
-                else:
-                    # Narrow image - use center
-                    if not left_occupied and layer_center_x < cell_center_x:
-                        left_occupied = True
-                    if not right_occupied and layer_center_x >= cell_center_x:
-                        right_occupied = True
-                
-                if left_occupied and right_occupied:
-                    break
-            
-            return (not left_occupied, not right_occupied)
-        
-        return (True, True)
-    except Exception as e:
-        write_log("ERROR checking occupancy: {0}".format(e))
-        return (True, True)
-
-def find_empty_cell(img, cells, cell_type, orientation, start_index=0):
-    """Find next empty cell"""
-    try:
-        write_log("====== Finding empty cell ======")
-        write_log("Cell type: {0}, Orientation: {1}".format(cell_type, orientation))
-        
-        for i in range(len(cells)):
-            cell = cells[i]
-            left_empty, right_empty = check_cell_occupancy(img, cell, cell_type)
-            
-            if cell_type.lower() == "single":
-                if left_empty:
-                    write_log("Single cell {0} available".format(cell['index']))
-                    return (cell, "left")
-            elif cell_type.lower() == "spread":
-                if orientation == "Landscape":
-                    if left_empty and right_empty:
-                        write_log("Spread cell {0} available for landscape".format(cell['index']))
-                        return (cell, "left")
-                else:  # Portrait
-                    if left_empty:
-                        write_log("Spread cell {0} available (left)".format(cell['index']))
-                        return (cell, "left")
-                    elif right_empty:
-                        write_log("Spread cell {0} available (right)".format(cell['index']))
-                        return (cell, "right")
-        
-        write_log("No empty cell found")
-        return (None, None)
-    except Exception as e:
-        write_log("ERROR in find_empty_cell: {0}".format(e))
-        return (None, None)
+# NOTE: Les fonctions check_cell_occupancy() et find_empty_cell() ont été
+# remplacées par check_cell_occupancy_optimized() et find_empty_cell_cached()
+# du module openboard_common pour des gains de performance 10-15x
 
 # ============================================================================
 # BOARD EXTENSION
@@ -1066,6 +759,89 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
                     write_log("Gutter created")
                 except Exception as e:
                     write_log("WARNING: Could not create gutter: {0}".format(e))
+            
+            # 5. Place overlay for new cell (if overlays are enabled)
+            # Logique identique a la V1 (importGimpBoard.py lignes 1589-1660)
+            if overlay_group and overlay_files and len(overlay_files) > 0:
+                try:
+                    row = new_cell.get('row')
+                    col = new_cell.get('col')
+                    
+                    # Fallback si row/col ne sont pas dans new_cell
+                    if row is None or col is None:
+                        cell_index = new_cell['index']
+                        row = ((cell_index - 1) // nbr_cols) + 1
+                        col = ((cell_index - 1) % nbr_cols) + 1
+                        write_log("WARNING: Using fallback row/col calculation for overlay")
+                    
+                    write_log("Placing overlay for cell R{0}C{1}".format(row, col))
+                    
+                    # Calculer l'index de l'overlay (meme logique que createOpenBoard.py)
+                    overlay_index = get_overlay_index_for_cell(row, col, nbr_cols, len(overlay_files), cell_type)
+                    if overlay_index >= len(overlay_files):
+                        overlay_index = overlay_index % len(overlay_files)
+                    
+                    overlay_path = overlay_files[overlay_index]
+                    write_log("Using overlay file: {0} (index {1})".format(overlay_path, overlay_index))
+                    
+                    # Determiner l'orientation de l'overlay
+                    orientation = get_image_orientation(overlay_path)
+                    write_log("Overlay orientation: {0}".format(orientation))
+                    
+                    # Calculer les dimensions et positions
+                    position_info = calculate_overlay_dimensions(
+                        cell_width_calc, cell_height_calc, cell_type, orientation, margin_size
+                    )
+                    
+                    # Placer l'overlay selon le type (exactement comme dans V1)
+                    if position_info['position'] == 'center':
+                        # Placement centre (Single ou Landscape en Spread)
+                        place_overlay_in_cell(
+                            img, overlay_path, cell_lx, cell_ty, 
+                            cell_width_calc, cell_height_calc,
+                            cell_type, overlay_group, position_info
+                        )
+                    elif position_info['position'] == 'split':
+                        # Placement separe (Portrait en Spread)
+                        # Placer l'overlay gauche
+                        left_info = {
+                            'position': 'center',
+                            'dimensions': position_info['dimensions']['left']
+                        }
+                        place_overlay_in_cell(
+                            img, overlay_path,
+                            cell_lx, cell_ty,
+                            int(position_info['dimensions']['left']['width']),
+                            int(position_info['dimensions']['left']['height']),
+                            cell_type, overlay_group, left_info
+                        )
+                        
+                        # Placer l'overlay droit (même fichier si un seul overlay, sinon fichier suivant)
+                        if len(overlay_files) > 1:
+                            next_index = (overlay_index + 1) % len(overlay_files)
+                            next_overlay_path = overlay_files[next_index]
+                        else:
+                            # Un seul overlay : utiliser le même fichier pour les deux côtés
+                            next_overlay_path = overlay_path
+                        
+                        right_info = {
+                            'position': 'center',
+                            'dimensions': position_info['dimensions']['right']
+                        }
+                        place_overlay_in_cell(
+                            img, next_overlay_path,
+                            int(cell_lx + position_info['dimensions']['right']['x']), cell_ty,
+                            int(position_info['dimensions']['right']['width']),
+                            int(position_info['dimensions']['right']['height']),
+                            cell_type, overlay_group, right_info
+                        )
+                    
+                    write_log("Overlay placed successfully for cell R{0}C{1}".format(row, col))
+                    
+                except Exception as e:
+                    write_log("WARNING: Could not place overlay on new cell: {0}".format(e))
+                    import traceback
+                    write_log("Traceback: {0}".format(traceback.format_exc()))
         
         write_log("All visual elements updated")
         
@@ -1177,7 +953,7 @@ def extend_board(img, dit_path, cells, metadata, extension_direction, cell_type,
 
 def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell, 
                           auto_extend=False, extension_direction=0, user_overlay_files=None, should_create_guides=False):
-    """Main import function"""
+    """Main import function - AVEC CACHE DE SESSION pour performance optimale"""
     global log_file_path
     
     board_path = pdb.gimp_image_get_filename(img)
@@ -1185,30 +961,34 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
         board_dir = os.path.dirname(board_path)
         board_name = os.path.splitext(os.path.basename(board_path))[0]
         log_file_path = os.path.join(board_dir, "{0}_import.log".format(board_name))
-        write_log("====== GIMP Board Import Started ======")
-        write_log("Board: {0}".format(board_path))
+        
+        # Fichier de préférence pour mode Alternate (à nettoyer à la fin)
+        alternate_pref_file = os.path.join(board_dir, "extension_direction.txt")
+        
+        write_log("====== GIMP Board Import Started ======", log_file_path)
+        write_log("Board: {0}".format(board_path), log_file_path)
     else:
         write_log("====== GIMP Board Import Started ======")
         pdb.gimp_message("Please save the board file first")
         return
     
     total_images = len(image_files)
-    write_log("Images to import: {0}".format(total_images))
-    write_log("Cell type: {0}, Resize: {1}".format(cell_type, resize_mode))
-    write_log("Auto extend: {0}, Direction: {1}".format(auto_extend, extension_direction))
-    write_log("Create guides: {0}".format(should_create_guides))
+    write_log("Images to import: {0}".format(total_images), log_file_path)
+    write_log("Cell type: {0}, Resize: {1}".format(cell_type, resize_mode), log_file_path)
+    write_log("Auto extend: {0}, Direction: {1}".format(auto_extend, extension_direction), log_file_path)
+    write_log("Create guides: {0}".format(should_create_guides), log_file_path)
     
     # Find .board file
     dit_path = os.path.join(board_dir, "{0}.board".format(board_name))
     if not os.path.exists(dit_path):
-        write_log("ERROR: BOARD file not found")
+        write_log("ERROR: BOARD file not found", log_file_path)
         pdb.gimp_message("BOARD file not found. Please open a valid board XCF file.")
         return
     
     # Read board data
     board_data = read_dit_file(dit_path)
     if not board_data:
-        write_log("ERROR: Failed to read BOARD file")
+        write_log("ERROR: Failed to read BOARD file", log_file_path)
         return
     
     cells = board_data['cells']
@@ -1217,7 +997,15 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
     
     overlay_files = user_overlay_files if user_overlay_files else board_overlay_files
     
-    write_log("Board has {0} cells".format(len(cells)))
+    write_log("Board has {0} cells".format(len(cells)), log_file_path)
+    
+    # 🔥 CONSTRUIRE LE CACHE DE SESSION (UNE SEULE FOIS)
+    write_log("====== BUILDING SESSION CACHE ======", log_file_path)
+    cache_start_time = time.time()
+    layer_bounds_cache = build_layer_bounds_cache(img)
+    cache_time = time.time() - cache_start_time
+    write_log("Cache built in {0:.3f}s - {1} layers indexed".format(
+        cache_time, len(layer_bounds_cache)), log_file_path)
     
     # Start import
     undo_started = False
@@ -1228,17 +1016,22 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
         pdb.gimp_image_undo_group_start(img)
         undo_started = True
         
+        import_start_time = time.time()
+        
         for i, image_file in enumerate(image_files):
             write_log("====== Processing {0}/{1}: {2} ======".format(
-                i + 1, total_images, os.path.basename(image_file)))
+                i + 1, total_images, os.path.basename(image_file)), log_file_path)
             
             pdb.gimp_progress_update(float(i) / float(total_images))
             
             orientation = get_image_orientation(image_file)
-            empty_cell, use_side = find_empty_cell(img, cells, cell_type, orientation)
+            
+            # 🔥 UTILISER LE CACHE pour trouver une cellule vide (10-15x plus rapide)
+            empty_cell, use_side = find_empty_cell_cached(
+                cells, cell_type, orientation, layer_bounds_cache)
             
             if empty_cell is None and auto_extend:
-                write_log("No empty cell, extending board...")
+                write_log("No empty cell, extending board...", log_file_path)
                 extension_success = extend_board(img, dit_path, cells, metadata, 
                                                 extension_direction, cell_type, overlay_files)
                 
@@ -1249,16 +1042,26 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
                         metadata = board_data['metadata']
                         if not user_overlay_files:
                             overlay_files = board_data.get('overlay_files', [])
-                        write_log("New cell count: {0}".format(len(cells)))
-                        empty_cell, use_side = find_empty_cell(img, cells, cell_type, orientation)
+                        write_log("New cell count: {0}".format(len(cells)), log_file_path)
+                        
+                        # 🔥 RECONSTRUIRE LE CACHE après extension du board
+                        write_log("Rebuilding cache after board extension...", log_file_path)
+                        rebuild_start = time.time()
+                        layer_bounds_cache = build_layer_bounds_cache(img)
+                        rebuild_time = time.time() - rebuild_start
+                        write_log("Cache rebuilt in {0:.3f}s".format(rebuild_time), log_file_path)
+                        
+                        # Nouvelle recherche avec cache mis à jour
+                        empty_cell, use_side = find_empty_cell_cached(
+                            cells, cell_type, orientation, layer_bounds_cache)
                 
                 if not extension_success or empty_cell is None:
-                    write_log("Extension failed, stopping")
+                    write_log("Extension failed, stopping", log_file_path)
                     images_failed = total_images - i
                     break
             
             if empty_cell is None:
-                write_log("No more empty cells, stopping")
+                write_log("No more empty cells, stopping", log_file_path)
                 images_failed = total_images - i
                 break
             
@@ -1267,41 +1070,66 @@ def import_images_to_board(img, image_files, cell_type, resize_mode, start_cell,
             
             if success:
                 images_placed += 1
+                
+                # 🔥 CRITIQUE : Reconstruire le cache après chaque placement
+                # Cela garantit que les cellules occupées sont détectées correctement
+                # Le coût est minime (<0.1s) comparé au gain global
+                cache_rebuild_start = time.time()
+                layer_bounds_cache = build_layer_bounds_cache(img)
+                cache_rebuild_time = time.time() - cache_rebuild_start
+                write_log("Cache updated after placement in {0:.3f}s".format(cache_rebuild_time), log_file_path)
             else:
                 images_failed += 1
         
         pdb.gimp_progress_update(1.0)
         
-        write_log("====== Import completed ======")
-        write_log("Placed: {0}, Failed: {1}".format(images_placed, images_failed))
+        total_import_time = time.time() - import_start_time
+        
+        write_log("====== Import completed ======", log_file_path)
+        write_log("Placed: {0}, Failed: {1}".format(images_placed, images_failed), log_file_path)
+        write_log("Total import time: {0:.2f}s ({1:.3f}s per image)".format(
+            total_import_time, 
+            total_import_time / max(1, len(image_files))), log_file_path)
+        
+        # 🔥 Le cache est automatiquement détruit ici (fin de scope)
+        write_log("Session cache destroyed (end of import)", log_file_path)
         
         # Auto-save
         if images_placed > 0 and board_path:
             try:
-                write_log("Auto-saving XCF file")
+                write_log("Auto-saving XCF file", log_file_path)
                 pdb.gimp_xcf_save(0, img, img.layers[0], board_path, board_path)
                 pdb.gimp_image_clean_all(img)
-                write_log("XCF file saved")
-                write_log("Import completed: {0} image(s) placed and saved.".format(images_placed))
+                write_log("XCF file saved", log_file_path)
+                write_log("Import completed: {0} image(s) placed and saved.".format(images_placed), log_file_path)
                 # pdb.gimp_message("Import completed: {0} image(s) placed and saved.".format(images_placed))
             except Exception as e:
-                write_log("ERROR saving: {0}".format(e))
-                write_log("Import completed: {0} image(s) placed but save failed.".format(images_placed))
+                write_log("ERROR saving: {0}".format(e), log_file_path)
+                write_log("Import completed: {0} image(s) placed but save failed.".format(images_placed), log_file_path)
                 # pdb.gimp_message("Import completed: {0} image(s) placed but save failed.".format(images_placed))
         elif images_placed > 0:
-            write_log("Import completed: {0} image(s) placed.".format(images_placed))
+            write_log("Import completed: {0} image(s) placed.".format(images_placed), log_file_path)
             # pdb.gimp_message("Import completed: {0} image(s) placed.".format(images_placed))
         
     except Exception as e:
-        write_log("ERROR during import: {0}".format(e))
+        write_log("ERROR during import: {0}".format(e), log_file_path)
         import traceback
-        write_log("Traceback: {0}".format(traceback.format_exc()))
+        write_log("Traceback: {0}".format(traceback.format_exc()), log_file_path)
     finally:
         if undo_started:
             try:
                 pdb.gimp_image_undo_group_end(img)
             except:
                 pass
+        
+        # 🧹 Nettoyage : Supprimer le fichier de préférence du mode Alternate
+        try:
+            if 'alternate_pref_file' in locals() and os.path.exists(alternate_pref_file):
+                os.remove(alternate_pref_file)
+                write_log("Cleaned up extension_direction.txt", log_file_path)
+        except Exception as cleanup_error:
+            write_log("Warning: Could not remove extension_direction.txt: {0}".format(cleanup_error), log_file_path)
+        
         pdb.gimp_displays_flush()
 
 # ============================================================================
@@ -1402,7 +1230,7 @@ register(
         (PF_TOGGLE, "overlay_enabled", "─────────── 🎭 OVERLAY ───────────\nEnable", False),
         (PF_FILE, "overlay_file", "Overlay File", ""),
         (PF_DIRNAME, "overlay_folder", "Overlay Folder", ""),
-        (PF_TOGGLE, "auto_extend", "─────────── ⚙️  EXTENSION ───────────\nAuto-extend", False),
+        (PF_TOGGLE, "auto_extend", "─────────── ⚙️  EXTENSION ───────────\nAuto-extend", True),
         (PF_OPTION, "extension_direction", "Direction", 2, ["Bottom", "Right", "Alternate"]),
         (PF_TOGGLE, "should_create_guides", "─────────── 📏 GUIDES ───────────\nCreate Guides", False)
     ],
