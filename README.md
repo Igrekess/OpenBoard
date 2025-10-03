@@ -7,7 +7,7 @@
 <a name="english"></a>
 ## 🇬🇧 English
 
-**Open Board** is the open-source version of [**Board**](https://github.com/Igrekess/BOARD) (which works integrated with Capture One and Photoshop). It's a set of Python scripts for GIMP that allow you to create, manage, and organize image boards professionally. Perfect for portfolios, mood boards, reference sheets, or any organized image presentation.
+**Open Board** is the open-source version of [**Board**](https://github.com/Igrekess/BOARD) (which works integrated with Capture One and Photoshop/InDesign and still in beta/dev). It's a set of Python scripts for GIMP that allow you to create, manage, and organize image boards professionally. Perfect for portfolios, mood boards, reference sheets, or any organized image presentation.
 
 ![GIMP Version](https://img.shields.io/badge/GIMP-2.10%2B-purple)
 ![Python](https://img.shields.io/badge/Python-2.7-blue)
@@ -240,7 +240,7 @@ MIT License - see LICENSE file for details
 <a name="français"></a>
 ## 🇫🇷 Français
 
-**Open Board** est la version open source de [**Board**](https://github.com/Igrekess/BOARD) (qui fonctionne en intégration avec Capture One et Photoshop). Il s'agit d'un ensemble de scripts Python pour GIMP qui permettent de créer, gérer et organiser des planches d'images (boards) de manière professionnelle. Parfait pour les portfolios, les mood boards, les planches de référence ou toute présentation d'images organisée.
+**Open Board** est la version open source de [**Board**](https://github.com/Igrekess/BOARD) (qui fonctionne en intégration avec Capture One et Photoshop/InDesign, et qui est toujours en beta/dev). Il s'agit d'un ensemble de scripts Python pour GIMP qui permettent de créer, gérer et organiser des planches d'images (boards) de manière professionnelle. Parfait pour les portfolios, les mood boards, les planches de référence ou toute présentation d'images organisée.
 
 ![GIMP Version](https://img.shields.io/badge/GIMP-2.10%2B-purple)
 ![Python](https://img.shields.io/badge/Python-2.7-blue)

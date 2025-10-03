@@ -301,7 +301,7 @@ def create_board_layout(board_name, dest_folder,
                        baseline_text, selected_font, baseline_text_size, baseline_text_color_hex,
                        logo_folder_path,
                        overlay_mask_on, overlay_file_path, overlay_folder_path,
-                       should_create_guides, drop_zone):
+                       should_create_guides):
     """Main function to create board layout"""
     
     write_log("Open Board - Layout Creator started")
@@ -750,7 +750,6 @@ register(
         (PF_FILE, "overlay_file_path", "File", ""),
         (PF_DIRNAME, "overlay_folder_path", "Folder", ""),
         (PF_TOGGLE, "should_create_guides", "─────────── ⚙️  OPTIONS ───────────\nGuides", False),
-        (PF_TOGGLE, "drop_zone", "Drop Zone", False),
     ],
     [],
     create_board_layout
